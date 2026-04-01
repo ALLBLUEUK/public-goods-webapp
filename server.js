@@ -184,12 +184,12 @@ function validateSettings(settings) {
   const endowment = Number(settings.endowment);
   const multiplier = Number(settings.multiplier);
 
-  if (!Number.isInteger(seatCount) || seatCount < 2 || seatCount > 80) {
-    throw new Error("人数必须是 2 到 80 的整数。");
+  if (!Number.isInteger(seatCount) || seatCount < 2) {
+    throw new Error("人数必须是不小于 2 的整数。");
   }
 
-  if (!Number.isInteger(maxRounds) || maxRounds < 1 || maxRounds > 30) {
-    throw new Error("轮次必须是 1 到 30 的整数。");
+  if (!Number.isInteger(maxRounds) || maxRounds < 1) {
+    throw new Error("轮次必须是不小于 1 的整数。");
   }
 
   if (!Number.isInteger(endowment) || endowment < 1 || endowment > 1000) {
