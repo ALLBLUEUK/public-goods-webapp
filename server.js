@@ -111,7 +111,6 @@ function ranking() {
     .filter((player) => player.token)
     .map((player) => ({
       seat: player.seat,
-      name: player.name,
       cumulative: player.cumulative,
       roundsPlayed: player.history.length,
     }))
@@ -134,6 +133,7 @@ function publicState(origin) {
       name: player.name,
       joined: Boolean(player.token),
       cumulative: player.cumulative,
+      availableWealth: player.cumulative + state.settings.endowment,
     })),
     currentRoundSummary: publicRound(getRound()),
     roundHistory: state.rounds
@@ -170,6 +170,7 @@ function teacherState(origin) {
       name: player.name,
       joined: Boolean(player.token),
       cumulative: player.cumulative,
+      availableWealth: player.cumulative + state.settings.endowment,
       history: player.history,
     })),
   };
@@ -232,13 +233,15 @@ function applyRoundResults(round) {
 
     const submission = round.submissions.find((item) => item.seat === player.seat);
     const contribution = submission ? submission.contribution : 0;
-    const privateKeep = endowment - contribution;
+    const startWealth = player.cumulative + endowment;
+    const privateKeep = startWealth - contribution;
     const score = privateKeep + round.publicShare;
 
-    player.cumulative += score;
+    player.cumulative = score;
     player.history.push({
       round: round.number,
       endowment,
+      startWealth,
       contribution,
       privateKeep,
       totalContribution: round.totalContribution,
@@ -407,6 +410,7 @@ async function handleApi(req, res, url) {
         seat: player.seat,
         name: player.name,
         cumulative: player.cumulative,
+        availableWealth: player.cumulative + state.settings.endowment,
         history: player.history,
       },
       currentRoundSummary: round
@@ -415,6 +419,7 @@ async function handleApi(req, res, url) {
             status: round.status,
             submitted: Boolean(ownSubmission),
             ownContribution: ownSubmission ? ownSubmission.contribution : null,
+            availableWealth: player.cumulative + state.settings.endowment,
             totalContribution: round.status === "closed" ? round.totalContribution : null,
             publicShare: round.status === "closed" ? round.publicShare : null,
           }
@@ -443,10 +448,10 @@ async function handleApi(req, res, url) {
     if (
       !Number.isInteger(contribution) ||
       contribution < 0 ||
-      contribution > state.settings.endowment
+      contribution > player.cumulative + state.settings.endowment
     ) {
       sendJson(res, 400, {
-        error: `投入必须是 0 到 ${state.settings.endowment} 的整数。`,
+        error: `投入必须是 0 到 ${player.cumulative + state.settings.endowment} 的整数。`,
       });
       return;
     }
