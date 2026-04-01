@@ -18,6 +18,7 @@ function createPlayers(count) {
     seat: index + 1,
     name: "",
     token: "",
+    joinedAt: "",
     cumulative: 0,
     history: [],
   }));
@@ -176,6 +177,10 @@ function teacherState(origin) {
 
 function playerByToken(token) {
   return state.players.find((player) => player.token === token) || null;
+}
+
+function normalizeName(name) {
+  return String(name || "").trim().toLowerCase();
 }
 
 function validateSettings(settings) {
@@ -340,26 +345,40 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/student/join") {
     const body = await getRequestBody(req);
-    const seat = Number(body.seat);
     const token = typeof body.token === "string" ? body.token : "";
     const name = typeof body.name === "string" ? body.name.trim().slice(0, 30) : "";
+    const normalized = normalizeName(name);
 
-    if (!Number.isInteger(seat) || seat < 1 || seat > state.settings.seatCount) {
-      sendJson(res, 400, { error: `座位号必须是 1 到 ${state.settings.seatCount} 的整数。` });
+    if (!name) {
+      sendJson(res, 400, { error: "姓名或代号不能为空。" });
       return;
     }
 
-    const player = state.players[seat - 1];
-    if (player.token && player.token !== token) {
-      sendJson(res, 409, { error: "这个座位已经被占用。" });
+    const sameNamePlayer = state.players.find(
+      (player) => player.token && normalizeName(player.name) === normalized
+    );
+    if (sameNamePlayer && sameNamePlayer.token !== token) {
+      sendJson(res, 409, { error: "这个名字已经被使用，请换一个名字。" });
+      return;
+    }
+
+    let player = token ? playerByToken(token) : null;
+
+    if (!player) {
+      player = state.players.find((item) => !item.token) || null;
+    }
+
+    if (!player) {
+      sendJson(res, 409, { error: "当前参与人数已满。" });
       return;
     }
 
     if (!player.token) {
       player.token = crypto.randomUUID();
+      player.joinedAt = new Date().toISOString();
     }
 
-    player.name = name || `P${seat}`;
+    player.name = name;
 
     sendJson(res, 200, {
       token: player.token,

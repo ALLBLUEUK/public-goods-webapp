@@ -273,7 +273,6 @@ function initStudent() {
   const joinCard = document.getElementById("joinCard");
   const joinForm = document.getElementById("joinForm");
   const joinTip = document.getElementById("joinTip");
-  const seatInput = document.getElementById("seatInput");
   const nameInput = document.getElementById("nameInput");
   const studentWorkspace = document.getElementById("studentWorkspace");
   const studentRules = document.getElementById("studentRules");
@@ -290,20 +289,9 @@ function initStudent() {
       studentRules.innerHTML = buildRules(settings);
       contributionInput.max = settings.endowment;
 
-      const currentSeats = Array.from(seatInput.options).map((option) => Number(option.value));
-      if (
-        currentSeats.length !== settings.seatCount ||
-        currentSeats.some((value, index) => value !== index + 1)
-      ) {
-        seatInput.innerHTML = Array.from({ length: settings.seatCount }, (_, index) => {
-          const seat = index + 1;
-          return `<option value="${seat}">${seat}</option>`;
-        }).join("");
-      }
-
       if (!token) {
         setText("studentStatus", "等待进入 Waiting");
-        setText("studentSeatBadge", `Seat --`);
+        setText("studentSeatBadge", `ID --`);
         return;
       }
 
@@ -321,7 +309,7 @@ function initStudent() {
           finished: "实验已结束 Finished",
         }[data.status] || data.status
       );
-      setText("studentSeatBadge", `Seat ${data.player.seat}`);
+      setText("studentSeatBadge", `ID ${data.player.seat}`);
       setText("studentCumulative", formatNumber(data.player.cumulative));
       setText("studentRoundTotal", formatNumber(data.currentRoundSummary?.totalContribution));
       setText("studentRoundShare", formatNumber(data.currentRoundSummary?.publicShare));
@@ -379,7 +367,6 @@ function initStudent() {
       const data = await request("/api/student/join", {
         method: "POST",
         body: {
-          seat: Number(seatInput.value),
           name: nameInput.value.trim(),
           token,
         },
