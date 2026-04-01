@@ -2,7 +2,6 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const os = require("os");
 
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -12,31 +11,35 @@ const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".ico": "image/x-icon",
 };
 
+function createPlayers(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    seat: index + 1,
+    name: "",
+    token: "",
+    cumulative: 0,
+    history: [],
+  }));
+}
+
 function freshState() {
+  const defaults = {
+    seatCount: 6,
+    maxRounds: 5,
+    endowment: 10,
+    multiplier: 0.5,
+  };
+
   return {
     sessionId: crypto.randomUUID(),
     sessionCode: crypto.randomBytes(3).toString("hex").toUpperCase(),
-    status: "lobby",
+    status: "setup",
     currentRound: 0,
-    maxRounds: 5,
-    seatCount: 6,
-    endowment: 10,
-    multiplier: 0.5,
     discussionAfterRound: 3,
     createdAt: new Date().toISOString(),
-    players: Array.from({ length: 6 }, (_, index) => ({
-      seat: index + 1,
-      name: "",
-      token: "",
-      connected: false,
-      cumulative: 0,
-      history: [],
-    })),
+    settings: defaults,
+    players: createPlayers(defaults.seatCount),
     rounds: [],
   };
 }
@@ -88,70 +91,79 @@ function getRound() {
   return state.rounds[state.currentRound - 1] || null;
 }
 
-function getRoundSummary(round) {
-  if (!round) return null;
+function publicRound(round) {
+  if (!round) {
+    return null;
+  }
 
   return {
     number: round.number,
     status: round.status,
-    totalContribution: round.totalContribution,
-    publicShare: round.publicShare,
-    submissions: round.submissions.map((item) => ({
-      seat: item.seat,
-      contribution: item.contribution,
-      submittedAt: item.submittedAt,
-    })),
     submittedCount: round.submissions.length,
-    openedAt: round.openedAt,
-    closedAt: round.closedAt,
+    totalContribution: round.status === "closed" ? round.totalContribution : null,
+    publicShare: round.status === "closed" ? round.publicShare : null,
   };
 }
 
-function publicState() {
-  const round = getRound();
+function ranking() {
+  return state.players
+    .filter((player) => player.token)
+    .map((player) => ({
+      seat: player.seat,
+      name: player.name,
+      cumulative: player.cumulative,
+      roundsPlayed: player.history.length,
+    }))
+    .sort((a, b) => b.cumulative - a.cumulative || a.seat - b.seat);
+}
+
+function publicState(origin) {
   return {
     sessionId: state.sessionId,
     sessionCode: state.sessionCode,
     status: state.status,
     currentRound: state.currentRound,
-    maxRounds: state.maxRounds,
-    seatCount: state.seatCount,
-    endowment: state.endowment,
-    multiplier: state.multiplier,
     discussionAfterRound: state.discussionAfterRound,
+    settings: state.settings,
     joinedCount: state.players.filter((player) => player.token).length,
+    joinUrl: `${origin}/?role=student`,
+    teacherUrl: `${origin}/?role=teacher`,
     players: state.players.map((player) => ({
       seat: player.seat,
       name: player.name,
       joined: Boolean(player.token),
+      cumulative: player.cumulative,
     })),
-    currentRoundSummary: round
-      ? {
-          number: round.number,
-          status: round.status,
-          totalContribution: round.status === "closed" ? round.totalContribution : null,
-          publicShare: round.status === "closed" ? round.publicShare : null,
-          submittedCount: round.submissions.length,
-        }
-      : null,
+    currentRoundSummary: publicRound(getRound()),
     roundHistory: state.rounds
-      .filter((item) => item.status === "closed")
-      .map((item) => ({
-        number: item.number,
-        totalContribution: item.totalContribution,
-        publicShare: item.publicShare,
+      .filter((round) => round.status === "closed")
+      .map((round) => ({
+        number: round.number,
+        totalContribution: round.totalContribution,
+        publicShare: round.publicShare,
+        submittedCount: round.submissions.length,
       })),
+    ranking: ranking(),
   };
 }
 
 function teacherState(origin) {
   const round = getRound();
   return {
-    ...publicState(),
-    origin,
-    joinUrl: `${origin}/?role=student`,
-    teacherUrl: `${origin}/?role=teacher`,
-    currentRoundSummary: getRoundSummary(round),
+    ...publicState(origin),
+    currentRoundSummary: round
+      ? {
+          number: round.number,
+          status: round.status,
+          submittedCount: round.submissions.length,
+          totalContribution: round.totalContribution,
+          publicShare: round.publicShare,
+          submissions: round.submissions.map((item) => ({
+            seat: item.seat,
+            contribution: item.contribution,
+          })),
+        }
+      : null,
     players: state.players.map((player) => ({
       seat: player.seat,
       name: player.name,
@@ -163,26 +175,67 @@ function teacherState(origin) {
 }
 
 function playerByToken(token) {
-  return state.players.find((player) => player.token && player.token === token) || null;
+  return state.players.find((player) => player.token === token) || null;
+}
+
+function validateSettings(settings) {
+  const seatCount = Number(settings.seatCount);
+  const maxRounds = Number(settings.maxRounds);
+  const endowment = Number(settings.endowment);
+  const multiplier = Number(settings.multiplier);
+
+  if (!Number.isInteger(seatCount) || seatCount < 2 || seatCount > 80) {
+    throw new Error("人数必须是 2 到 80 的整数。");
+  }
+
+  if (!Number.isInteger(maxRounds) || maxRounds < 1 || maxRounds > 30) {
+    throw new Error("轮次必须是 1 到 30 的整数。");
+  }
+
+  if (!Number.isInteger(endowment) || endowment < 1 || endowment > 1000) {
+    throw new Error("每轮初始资金必须是 1 到 1000 的整数。");
+  }
+
+  if (!Number.isFinite(multiplier) || multiplier <= 0 || multiplier > 10) {
+    throw new Error("公共品回报系数必须大于 0 且不超过 10。");
+  }
+
+  return {
+    seatCount,
+    maxRounds,
+    endowment,
+    multiplier,
+  };
+}
+
+function resetSession() {
+  state = freshState();
 }
 
 function applyRoundResults(round) {
+  const { endowment, multiplier } = state.settings;
+
   round.totalContribution = round.submissions.reduce((sum, item) => sum + item.contribution, 0);
-  round.publicShare = round.totalContribution * state.multiplier;
+  round.publicShare = round.totalContribution * multiplier;
   round.status = "closed";
   round.closedAt = new Date().toISOString();
 
   for (const player of state.players) {
-    if (!player.token) continue;
+    if (!player.token) {
+      continue;
+    }
 
     const submission = round.submissions.find((item) => item.seat === player.seat);
     const contribution = submission ? submission.contribution : 0;
-    const score = state.endowment - contribution + round.publicShare;
+    const privateKeep = endowment - contribution;
+    const score = privateKeep + round.publicShare;
 
     player.cumulative += score;
     player.history.push({
       round: round.number,
+      endowment,
       contribution,
+      privateKeep,
       totalContribution: round.totalContribution,
       publicShare: round.publicShare,
       score,
@@ -190,26 +243,11 @@ function applyRoundResults(round) {
     });
   }
 
-  state.status = round.number >= state.maxRounds ? "finished" : "results";
-}
-
-function resetSession() {
-  state = freshState();
-}
-
-function collectOrigins(port) {
-  const interfaces = os.networkInterfaces();
-  const urls = [];
-
-  for (const values of Object.values(interfaces)) {
-    for (const item of values || []) {
-      if (item.family === "IPv4" && !item.internal) {
-        urls.push(`http://${item.address}:${port}`);
-      }
-    }
+  if (round.number >= state.settings.maxRounds) {
+    state.status = "finished";
+  } else {
+    state.status = "results";
   }
-
-  return urls;
 }
 
 async function handleApi(req, res, url) {
@@ -219,13 +257,7 @@ async function handleApi(req, res, url) {
       : `http://${req.headers.host}`;
 
   if (req.method === "GET" && url.pathname === "/api/meta") {
-    sendJson(res, 200, {
-      ...publicState(),
-      origin,
-      joinUrl: `${origin}/?role=student`,
-      teacherUrl: `${origin}/?role=teacher`,
-      localOrigins: collectOrigins(PORT),
-    });
+    sendJson(res, 200, publicState(origin));
     return;
   }
 
@@ -240,14 +272,40 @@ async function handleApi(req, res, url) {
     return;
   }
 
-  if (req.method === "POST" && url.pathname === "/api/teacher/start-round") {
-    if (state.status === "collecting") {
-      sendJson(res, 409, { error: "当前轮次还在收集提交。" });
+  if (req.method === "POST" && url.pathname === "/api/teacher/configure") {
+    const body = await getRequestBody(req);
+
+    if (state.currentRound > 0 || state.players.some((player) => player.token)) {
+      sendJson(res, 409, { error: "已有学生加入或轮次已开始，请先重置后再修改设置。" });
       return;
     }
 
-    if (state.currentRound >= state.maxRounds) {
+    try {
+      const settings = validateSettings(body);
+      state.settings = settings;
+      state.players = createPlayers(settings.seatCount);
+      state.discussionAfterRound = Math.min(3, settings.maxRounds);
+      state.status = "lobby";
+      sendJson(res, 200, teacherState(origin));
+    } catch (error) {
+      sendJson(res, 400, { error: error.message });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/teacher/start-round") {
+    if (state.status === "collecting") {
+      sendJson(res, 409, { error: "当前轮次还在进行中。" });
+      return;
+    }
+
+    if (state.currentRound >= state.settings.maxRounds) {
       sendJson(res, 409, { error: "已经完成全部轮次。" });
+      return;
+    }
+
+    if (state.status === "setup") {
+      sendJson(res, 409, { error: "请先完成教师端设置。" });
       return;
     }
 
@@ -269,8 +327,9 @@ async function handleApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/teacher/close-round") {
     const round = getRound();
+
     if (!round || round.status !== "collecting") {
-      sendJson(res, 409, { error: "当前没有正在进行的轮次。" });
+      sendJson(res, 409, { error: "当前没有可结束的轮次。" });
       return;
     }
 
@@ -283,10 +342,10 @@ async function handleApi(req, res, url) {
     const body = await getRequestBody(req);
     const seat = Number(body.seat);
     const token = typeof body.token === "string" ? body.token : "";
-    const name = typeof body.name === "string" ? body.name.trim().slice(0, 20) : "";
+    const name = typeof body.name === "string" ? body.name.trim().slice(0, 30) : "";
 
-    if (!Number.isInteger(seat) || seat < 1 || seat > state.seatCount) {
-      sendJson(res, 400, { error: "座位号必须是 1 到 6 的整数。" });
+    if (!Number.isInteger(seat) || seat < 1 || seat > state.settings.seatCount) {
+      sendJson(res, 400, { error: `座位号必须是 1 到 ${state.settings.seatCount} 的整数。` });
       return;
     }
 
@@ -300,8 +359,7 @@ async function handleApi(req, res, url) {
       player.token = crypto.randomUUID();
     }
 
-    player.connected = true;
-    player.name = name || `学生 ${seat}`;
+    player.name = name || `P${seat}`;
 
     sendJson(res, 200, {
       token: player.token,
@@ -315,6 +373,7 @@ async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/student/state") {
     const token = url.searchParams.get("token") || "";
     const player = playerByToken(token);
+
     if (!player) {
       sendJson(res, 404, { error: "未找到该学生身份，请重新进入。" });
       return;
@@ -324,7 +383,7 @@ async function handleApi(req, res, url) {
     const ownSubmission = round?.submissions.find((item) => item.seat === player.seat) || null;
 
     sendJson(res, 200, {
-      ...publicState(),
+      ...publicState(origin),
       player: {
         seat: player.seat,
         name: player.name,
@@ -362,8 +421,14 @@ async function handleApi(req, res, url) {
       return;
     }
 
-    if (!Number.isInteger(contribution) || contribution < 0 || contribution > state.endowment) {
-      sendJson(res, 400, { error: "投入必须是 0 到 10 的整数。" });
+    if (
+      !Number.isInteger(contribution) ||
+      contribution < 0 ||
+      contribution > state.settings.endowment
+    ) {
+      sendJson(res, 400, {
+        error: `投入必须是 0 到 ${state.settings.endowment} 的整数。`,
+      });
       return;
     }
 

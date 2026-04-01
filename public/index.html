@@ -3,183 +3,234 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>公共账户课堂实验</title>
+    <title>Public Goods Classroom Game</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <section class="hero">
-        <div>
-          <p class="eyebrow">Public Goods Classroom Game</p>
-          <h1>公共账户课堂实验</h1>
-          <p class="subcopy">
-            学生端只做两件事：投多少、看自己怎么算分。教师端控制轮次、收集提交、公布全班总投入。
+    <main class="app-shell">
+      <section class="hero" id="homeHero">
+        <div class="hero-copy">
+          <p class="eyebrow">课堂公共品实验 | Public Goods Game</p>
+          <h1>扫码进入，在线决策，自动结算</h1>
+          <p class="lead">
+            教师端负责设置人数与轮次、开始与结束轮次、展示全班总投入与资金排名。
+            学生端只做两件事：看规则，提交投入。
           </p>
         </div>
         <div class="hero-actions" id="homeActions">
-          <a class="button" href="/?role=student">进入学生端</a>
-          <a class="button button-secondary" href="/?role=teacher">进入教师端</a>
+          <a class="button" href="/?role=teacher">教师端 Teacher</a>
+          <a class="button button-secondary" href="/?role=student">学生端 Student</a>
         </div>
       </section>
 
-      <section class="panel hidden" id="teacherPanel">
-        <div class="panel-header">
+      <section class="hidden" id="teacherPanel">
+        <header class="page-head">
           <div>
             <p class="eyebrow">Teacher Console</p>
-            <h2>教师端</h2>
+            <h2>教师端 Teacher</h2>
           </div>
-          <div class="pill-row">
+          <div class="status-row">
             <span class="pill" id="teacherStatus">加载中</span>
-            <span class="pill" id="teacherSessionCode">房间码 --</span>
+            <span class="pill" id="teacherSessionCode">Session --</span>
           </div>
-        </div>
+        </header>
 
-        <div class="teacher-grid">
-          <article class="card">
-            <h3>加入链接</h3>
-            <p class="muted">学生扫码或打开这个链接即可进入。</p>
-            <div class="link-box" id="joinUrl">加载中</div>
-            <img class="qr" id="qrImage" alt="学生加入二维码" />
-            <p class="tiny muted">二维码使用在线生成服务。如果学校网络拦截，直接让学生输入上方网址即可。</p>
+        <section class="teacher-layout">
+          <article class="card card-span setup-card">
+            <div class="split-head">
+              <div>
+                <h3>课堂设置 Classroom Setup</h3>
+                <p class="muted">先配置，再让学生扫码进入。开始第一轮后需重置才能改参数。</p>
+              </div>
+            </div>
+            <form id="configForm" class="config-grid">
+              <label>
+                <span>人数 Players</span>
+                <input id="seatCountInput" type="number" min="2" max="80" value="6" />
+              </label>
+              <label>
+                <span>轮次 Rounds</span>
+                <input id="maxRoundsInput" type="number" min="1" max="30" value="5" />
+              </label>
+              <label>
+                <span>每轮初始资金 Endowment</span>
+                <input id="endowmentInput" type="number" min="1" max="1000" value="10" />
+              </label>
+              <label>
+                <span>每 1 点公共投入给每人带来的回报 Return per public point</span>
+                <input id="multiplierInput" type="number" min="0.1" max="10" step="0.1" value="0.5" />
+              </label>
+              <button class="button" type="submit">保存设置 Save Settings</button>
+            </form>
           </article>
 
-          <article class="card">
-            <h3>课堂控制</h3>
+          <article class="card rules-card">
+            <h3>投屏规则 Rules for Projection</h3>
+            <div id="teacherRules" class="rules-text"></div>
+          </article>
+
+          <article class="card control-card">
+            <h3>课堂控制 Live Control</h3>
             <div class="button-stack">
-              <button class="button" id="startRoundButton">开始下一轮</button>
-              <button class="button button-secondary" id="closeRoundButton">关闭本轮并结算</button>
-              <button class="button button-danger" id="resetButton">重置整场实验</button>
+              <button class="button" id="startRoundButton">开始下一轮 Start Round</button>
+              <button class="button button-secondary" id="closeRoundButton">结束本轮 End Round</button>
+              <button class="button button-danger" id="resetButton">重置全部 Reset</button>
             </div>
-            <div class="stat-grid">
-              <div>
-                <span class="stat-label">当前轮次</span>
-                <strong id="currentRoundValue">0 / 5</strong>
+            <div class="kpi-grid">
+              <div class="kpi-box">
+                <span class="kpi-label">当前轮次 Current Round</span>
+                <strong id="currentRoundValue">0 / 0</strong>
               </div>
-              <div>
-                <span class="stat-label">已加入</span>
-                <strong id="joinedCountValue">0 / 6</strong>
+              <div class="kpi-box">
+                <span class="kpi-label">已加入 Joined</span>
+                <strong id="joinedCountValue">0 / 0</strong>
               </div>
-              <div>
-                <span class="stat-label">已提交</span>
-                <strong id="submittedCountValue">0 / 6</strong>
+              <div class="kpi-box">
+                <span class="kpi-label">已提交 Submitted</span>
+                <strong id="submittedCountValue">0 / 0</strong>
               </div>
-              <div>
-                <span class="stat-label">讨论提示</span>
-                <strong id="discussionHint">第 4 轮前讨论</strong>
-              </div>
-            </div>
-          </article>
-
-          <article class="card">
-            <h3>本轮信息</h3>
-            <div class="round-board">
-              <div>
-                <span class="stat-label">全班总投入</span>
+              <div class="kpi-box accent-box">
+                <span class="kpi-label">本轮总投入 Total Contribution</span>
                 <strong id="roundTotalValue">--</strong>
               </div>
-              <div>
-                <span class="stat-label">每人公共回报</span>
+              <div class="kpi-box accent-box">
+                <span class="kpi-label">每人公共回报 Public Return per Person</span>
                 <strong id="roundShareValue">--</strong>
               </div>
             </div>
+          </article>
+
+          <article class="card join-card">
+            <h3>学生入口 Student Entry</h3>
+            <div class="link-box" id="joinUrl">加载中</div>
+            <img class="qr" id="qrImage" alt="Join QR code" />
+            <p class="muted tiny">
+              学生端只显示自己的记录，不显示其他人的投入。<br />
+              Student view only shows each student's own record.
+            </p>
+          </article>
+
+          <article class="card">
+            <h3>参与状态 Seats</h3>
             <div id="seatBoard" class="seat-board"></div>
           </article>
 
-          <article class="card card-wide">
-            <h3>5 轮汇总</h3>
+          <article class="card">
+            <h3>资金排名 Wealth Ranking</h3>
             <table>
               <thead>
                 <tr>
-                  <th>轮次</th>
-                  <th>全班总投入</th>
-                  <th>每人公共回报</th>
+                  <th>排名 Rank</th>
+                  <th>座位 Seat</th>
+                  <th>姓名 Name</th>
+                  <th>累计资金 Wealth</th>
+                </tr>
+              </thead>
+              <tbody id="rankingTable"></tbody>
+            </table>
+          </article>
+
+          <article class="card card-span">
+            <h3>轮次汇总 Round History</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>轮次 Round</th>
+                  <th>全班总投入 Total Contribution</th>
+                  <th>每人公共回报 Public Return per Person</th>
+                  <th>提交人数 Submitted</th>
                 </tr>
               </thead>
               <tbody id="historyTable"></tbody>
             </table>
           </article>
-        </div>
+        </section>
       </section>
 
-      <section class="panel hidden" id="studentPanel">
-        <div class="panel-header">
+      <section class="hidden" id="studentPanel">
+        <header class="page-head">
           <div>
             <p class="eyebrow">Student View</p>
-            <h2>学生端</h2>
+            <h2>学生端 Student</h2>
           </div>
-          <div class="pill-row">
+          <div class="status-row">
             <span class="pill" id="studentStatus">加载中</span>
-            <span class="pill" id="studentSeatBadge">座位 --</span>
+            <span class="pill" id="studentSeatBadge">Seat --</span>
           </div>
-        </div>
+        </header>
 
-        <article class="card" id="joinCard">
-          <h3>进入实验</h3>
-          <p class="muted">每个人选一个固定座位号，整场 5 轮都用同一个设备提交。</p>
-          <form id="joinForm" class="join-form">
-            <label>
-              <span>座位号</span>
-              <select id="seatInput">
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-                <option value="6">6</option>
-              </select>
-            </label>
-            <label>
-              <span>名字，可留空</span>
-              <input id="nameInput" maxlength="20" placeholder="如：A / 1号 / 留空" />
-            </label>
-            <button class="button" type="submit">进入</button>
-          </form>
-          <p class="tiny muted" id="joinTip">进入后，系统只显示你自己的得分记录。</p>
-        </article>
-
-        <div id="studentWorkspace" class="hidden">
-          <article class="card">
-            <h3>本轮决策</h3>
-            <p class="muted" id="studentInstruction">等待教师开始本轮。</p>
-            <form id="submitForm" class="decision-form">
+        <section class="student-layout">
+          <article class="card" id="joinCard">
+            <h3>进入实验 Join the Session</h3>
+            <p class="muted">
+              请选择一个固定座位号。整场实验中，同一位学生应使用同一台设备。<br />
+              Choose one fixed seat number and use the same device for the whole game.
+            </p>
+            <form id="joinForm" class="config-grid">
               <label>
-                <span>投入公共账户</span>
-                <input id="contributionInput" type="number" min="0" max="10" step="1" value="0" />
+                <span>座位号 Seat</span>
+                <select id="seatInput"></select>
               </label>
-              <button class="button" type="submit">提交本轮投入</button>
+              <label>
+                <span>姓名或代号 Name / Alias</span>
+                <input id="nameInput" maxlength="30" placeholder="例如 Example: A / Team 1" />
+              </label>
+              <button class="button" type="submit">进入 Join</button>
             </form>
-            <div class="round-board">
-              <div>
-                <span class="stat-label">本轮总投入</span>
-                <strong id="studentRoundTotal">--</strong>
-              </div>
-              <div>
-                <span class="stat-label">每人公共回报</span>
-                <strong id="studentRoundShare">--</strong>
-              </div>
-              <div>
-                <span class="stat-label">累计得分</span>
-                <strong id="studentCumulative">0</strong>
-              </div>
-            </div>
+            <p class="tiny muted" id="joinTip">进入后你只能看到自己的投入和自己的累计资金。</p>
           </article>
 
           <article class="card">
-            <h3>我的 5 轮记录</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>轮次</th>
-                  <th>我投了</th>
-                  <th>本轮总投入</th>
-                  <th>我本轮得分</th>
-                  <th>累计</th>
-                </tr>
-              </thead>
-              <tbody id="studentHistory"></tbody>
-            </table>
+            <h3>学生规则 Student Rules</h3>
+            <div id="studentRules" class="rules-text"></div>
           </article>
-        </div>
+
+          <div id="studentWorkspace" class="hidden student-grid">
+            <article class="card">
+              <h3>本轮决策 Current Decision</h3>
+              <p class="muted" id="studentInstruction">等待教师开始本轮。 Waiting for the teacher.</p>
+              <form id="submitForm" class="decision-grid">
+                <label>
+                  <span>本轮投入 Contribution This Round</span>
+                  <input id="contributionInput" type="number" min="0" max="10" step="1" value="0" />
+                </label>
+                <button class="button" type="submit">提交 Submit</button>
+              </form>
+              <div class="kpi-grid compact-grid">
+                <div class="kpi-box">
+                  <span class="kpi-label">本轮总投入 Total Contribution</span>
+                  <strong id="studentRoundTotal">--</strong>
+                </div>
+                <div class="kpi-box">
+                  <span class="kpi-label">每人公共回报 Public Return</span>
+                  <strong id="studentRoundShare">--</strong>
+                </div>
+                <div class="kpi-box accent-box">
+                  <span class="kpi-label">累计资金 My Wealth</span>
+                  <strong id="studentCumulative">0</strong>
+                </div>
+              </div>
+            </article>
+
+            <article class="card">
+              <h3>我的记录 My History</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>轮次</th>
+                    <th>初始资金</th>
+                    <th>我投了</th>
+                    <th>我保留</th>
+                    <th>全班总投入</th>
+                    <th>我本轮资金</th>
+                    <th>累计资金</th>
+                  </tr>
+                </thead>
+                <tbody id="studentHistory"></tbody>
+              </table>
+            </article>
+          </div>
+        </section>
       </section>
     </main>
     <script src="/app.js"></script>
