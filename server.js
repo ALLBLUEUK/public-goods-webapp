@@ -133,7 +133,7 @@ function publicState(origin) {
       name: player.name,
       joined: Boolean(player.token),
       cumulative: player.cumulative,
-      availableWealth: player.cumulative + state.settings.endowment,
+      availableWealth: player.history.length === 0 ? state.settings.endowment : player.cumulative,
     })),
     currentRoundSummary: publicRound(getRound()),
     roundHistory: state.rounds
@@ -170,7 +170,7 @@ function teacherState(origin) {
       name: player.name,
       joined: Boolean(player.token),
       cumulative: player.cumulative,
-      availableWealth: player.cumulative + state.settings.endowment,
+      availableWealth: player.history.length === 0 ? state.settings.endowment : player.cumulative,
       history: player.history,
     })),
   };
@@ -233,7 +233,7 @@ function applyRoundResults(round) {
 
     const submission = round.submissions.find((item) => item.seat === player.seat);
     const contribution = submission ? submission.contribution : 0;
-    const startWealth = player.cumulative + endowment;
+    const startWealth = player.history.length === 0 ? endowment : player.cumulative;
     const privateKeep = startWealth - contribution;
     const score = privateKeep + round.publicShare;
 
@@ -410,7 +410,7 @@ async function handleApi(req, res, url) {
         seat: player.seat,
         name: player.name,
         cumulative: player.cumulative,
-        availableWealth: player.cumulative + state.settings.endowment,
+        availableWealth: player.history.length === 0 ? state.settings.endowment : player.cumulative,
         history: player.history,
       },
       currentRoundSummary: round
@@ -419,7 +419,7 @@ async function handleApi(req, res, url) {
             status: round.status,
             submitted: Boolean(ownSubmission),
             ownContribution: ownSubmission ? ownSubmission.contribution : null,
-            availableWealth: player.cumulative + state.settings.endowment,
+            availableWealth: player.history.length === 0 ? state.settings.endowment : player.cumulative,
             totalContribution: round.status === "closed" ? round.totalContribution : null,
             publicShare: round.status === "closed" ? round.publicShare : null,
           }
@@ -448,10 +448,13 @@ async function handleApi(req, res, url) {
     if (
       !Number.isInteger(contribution) ||
       contribution < 0 ||
-      contribution > player.cumulative + state.settings.endowment
+      contribution >
+        (player.history.length === 0 ? state.settings.endowment : player.cumulative)
     ) {
+      const maxContribution =
+        player.history.length === 0 ? state.settings.endowment : player.cumulative;
       sendJson(res, 400, {
-        error: `投入必须是 0 到 ${player.cumulative + state.settings.endowment} 的整数。`,
+        error: `投入必须是 0 到 ${maxContribution} 的整数。`,
       });
       return;
     }

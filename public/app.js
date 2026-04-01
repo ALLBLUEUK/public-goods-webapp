@@ -50,9 +50,10 @@ function buildRules(settings) {
   return `
     <p><strong>中文</strong></p>
     <p>
-      每一轮开始时，你的本轮可用资金 = <strong>你上一轮结束后的累计资金 + ${formatNumber(settings.endowment)}</strong>。
-      你可以把其中一部分投入公共账户，也可以自己保留。投入必须是
-      <strong>0 到你的本轮可用资金</strong> 的整数。
+      第 1 轮开始前，每位同学有 <strong>${formatNumber(settings.endowment)}</strong> 点初始资金。
+      从第 2 轮开始，不再额外发放资金。你的当前资金只来自
+      <strong>上一轮结束后剩下的资金 + 每轮公共品回报</strong>。
+      你每轮的投入必须是 <strong>0 到你当前资金</strong> 的整数。
     </p>
     <p>
       你本轮资金 = <strong>自己保留的资金</strong> + <strong>公共账户给每个人分到的回报</strong>。
@@ -60,15 +61,17 @@ function buildRules(settings) {
       <strong>${formatNumber(settings.multiplier)} × G</strong>。
     </p>
     <p>
-      所以，你本轮资金 = <strong>本轮可用资金 - 你的投入 + ${formatNumber(settings.multiplier)} × 全班总投入</strong>。
-      累计资金越高越好。
+      所以，你本轮结束后的资金 = <strong>当前资金 - 你的投入 + ${formatNumber(settings.multiplier)} × 全班总投入</strong>。
+      最终资金越高越好。
     </p>
     <p><strong>English</strong></p>
     <p>
-      At the start of each round, your available wealth equals
-      <strong>your wealth carried over from the previous round + ${formatNumber(settings.endowment)}</strong>.
-      You may contribute part of it to the public account and keep the rest.
-      Your contribution must be an integer between <strong>0</strong> and <strong>your available wealth this round</strong>.
+      Before Round 1, each student receives an initial wealth of
+      <strong>${formatNumber(settings.endowment)}</strong>.
+      From Round 2 onward, no new wealth is added automatically.
+      Your current wealth comes only from
+      <strong>what you kept previously + the public return from earlier rounds</strong>.
+      Your contribution each round must be an integer between <strong>0</strong> and <strong>your current wealth</strong>.
     </p>
     <p>
       Your wealth this round = <strong>the amount you keep</strong> +
@@ -77,8 +80,8 @@ function buildRules(settings) {
       <strong>${formatNumber(settings.multiplier)} × G</strong> from the public account.
     </p>
     <p>
-      So, your round wealth = <strong>available wealth this round - your contribution + ${formatNumber(settings.multiplier)} × total class contribution</strong>.
-      Higher cumulative wealth is better.
+      So, your end-of-round wealth = <strong>current wealth - your contribution + ${formatNumber(settings.multiplier)} × total class contribution</strong>.
+      Higher final wealth is better.
     </p>
   `;
 }
@@ -115,9 +118,9 @@ function initTeacher() {
       setText("teacherStatus", {
         setup: "待设置 Setup",
         lobby: "等待开始 Lobby",
-        collecting: "正在收集 Collecting",
-        results: "已结算 Results",
-        finished: "已结束 Finished",
+        collecting: "本轮进行中 Round Open",
+        results: "本轮已结束 Round Closed",
+        finished: "全部结束 Finished",
       }[data.status] || data.status);
       setText("teacherSessionCode", `Session ${data.sessionCode}`);
       setText("currentRoundValue", `${data.currentRound}`);
@@ -168,11 +171,11 @@ function initTeacher() {
                 data.status === "finished" && player.joined
                   ? `Name: ${escapeHtml(player.name || "-")}`
                   : player.joined
-                    ? "Name hidden until final round"
+                    ? "姓名将在全部轮次结束后显示 / Name hidden until final reveal"
                     : "-"
               }</div>
               <div class="tiny">${
-                active ? "Submitted this round" : "No submission yet"
+                active ? "已提交 / Submitted" : "未提交 / Not submitted"
               }</div>
             </div>
           `;
@@ -202,7 +205,7 @@ function initTeacher() {
           })()
         : (() => {
             rankingNameHeader.classList.add("hidden");
-            return `<tr><td colspan="${data.status === "finished" ? 4 : 3}">No players yet.</td></tr>`;
+            return `<tr><td colspan="${data.status === "finished" ? 4 : 3}">暂无参与者 / No players yet.</td></tr>`;
           })();
 
       historyTable.innerHTML = data.roundHistory.length
@@ -309,6 +312,7 @@ function initStudent() {
       if (!token) {
         setText("studentStatus", "等待进入 Waiting");
         setText("studentSeatBadge", `ID --`);
+        setText("studentAvailableWealth", "0");
         return;
       }
 
@@ -327,6 +331,7 @@ function initStudent() {
         }[data.status] || data.status
       );
       setText("studentSeatBadge", `ID ${data.player.seat}`);
+      setText("studentAvailableWealth", formatNumber(data.player.availableWealth));
       setText("studentCumulative", formatNumber(data.player.cumulative));
       setText("studentRoundTotal", formatNumber(data.currentRoundSummary?.totalContribution));
       setText("studentRoundShare", formatNumber(data.currentRoundSummary?.publicShare));
@@ -338,10 +343,10 @@ function initStudent() {
       } else if (data.status === "collecting") {
         instruction.textContent = data.currentRoundSummary?.submitted
           ? `第 ${data.currentRound} 轮已提交：你投了 ${data.currentRoundSummary.ownContribution}。 Round ${data.currentRound} submitted.`
-          : `第 ${data.currentRound} 轮进行中。请输入 0 到 ${formatNumber(data.player.availableWealth)} 的整数。 Round ${data.currentRound} is open.`;
+          : `第 ${data.currentRound} 轮进行中。你当前资金为 ${formatNumber(data.player.availableWealth)}。请输入 0 到 ${formatNumber(data.player.availableWealth)} 的整数。 Round ${data.currentRound} is open.`;
       } else if (data.status === "results") {
         instruction.textContent =
-          "教师已结束本轮，请查看本轮资金与累计资金。Round closed. Check your wealth.";
+          "教师已结束本轮，请查看你的当前资金与公共回报。Round closed. Check your wealth and the public return.";
       } else if (data.status === "finished") {
         instruction.textContent = "全部轮次结束。All rounds are finished.";
       }
