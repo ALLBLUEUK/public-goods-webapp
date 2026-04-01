@@ -94,6 +94,7 @@ function initTeacher() {
   const seatBoard = document.getElementById("seatBoard");
   const teacherRules = document.getElementById("teacherRules");
   const roundResultText = document.getElementById("roundResultText");
+  const rankingIdHeader = document.getElementById("rankingIdHeader");
   const rankingNameHeader = document.getElementById("rankingNameHeader");
   const configForm = document.getElementById("configForm");
   const seatCountInput = document.getElementById("seatCountInput");
@@ -185,13 +186,13 @@ function initTeacher() {
       rankingTable.innerHTML = data.ranking.length
         ? (() => {
             const revealNames = data.status === "finished";
+            rankingIdHeader.classList.add("hidden");
             rankingNameHeader.classList.toggle("hidden", !revealNames);
             return data.ranking
               .map(
                 (item, index) => `
                   <tr>
                     <td>${index + 1}</td>
-                    <td>${item.seat}</td>
                     ${
                       revealNames
                         ? `<td>${escapeHtml((data.players.find((p) => p.seat === item.seat) || {}).name || "-")}</td>`
@@ -204,8 +205,9 @@ function initTeacher() {
               .join("");
           })()
         : (() => {
+            rankingIdHeader.classList.add("hidden");
             rankingNameHeader.classList.add("hidden");
-            return `<tr><td colspan="${data.status === "finished" ? 4 : 3}">暂无参与者 / No players yet.</td></tr>`;
+            return `<tr><td colspan="${data.status === "finished" ? 3 : 2}">暂无参与者 / No players yet.</td></tr>`;
           })();
 
       historyTable.innerHTML = data.roundHistory.length
