@@ -89,6 +89,7 @@ function initTeacher() {
   const historyTable = document.getElementById("historyTable");
   const seatBoard = document.getElementById("seatBoard");
   const teacherRules = document.getElementById("teacherRules");
+  const roundResultText = document.getElementById("roundResultText");
   const configForm = document.getElementById("configForm");
   const seatCountInput = document.getElementById("seatCountInput");
   const maxRoundsInput = document.getElementById("maxRoundsInput");
@@ -117,14 +118,37 @@ function initTeacher() {
         finished: "已结束 Finished",
       }[data.status] || data.status);
       setText("teacherSessionCode", `Session ${data.sessionCode}`);
-      setText("currentRoundValue", `${data.currentRound} / ${data.settings.maxRounds}`);
-      setText("joinedCountValue", `${data.joinedCount} / ${data.settings.seatCount}`);
-      setText(
-        "submittedCountValue",
-        `${data.currentRoundSummary?.submittedCount || 0} / ${data.settings.seatCount}`
-      );
+      setText("currentRoundValue", `${data.currentRound}`);
+      setText("plannedRoundsValue", `${data.settings.maxRounds}`);
+      setText("joinedCountValue", `${data.joinedCount}`);
+      setText("submittedCountValue", `${data.currentRoundSummary?.submittedCount || 0}`);
       setText("roundTotalValue", formatNumber(data.currentRoundSummary?.totalContribution));
       setText("roundShareValue", formatNumber(data.currentRoundSummary?.publicShare));
+
+      if (data.currentRoundSummary?.status === "closed") {
+        roundResultText.innerHTML = `
+          第 ${data.currentRoundSummary.number} 轮已结束。<br />
+          Round ${data.currentRoundSummary.number} is closed.<br /><br />
+          全班总投入 Total Contribution:
+          <strong>${formatNumber(data.currentRoundSummary.totalContribution)}</strong><br />
+          每人公共回报 Public Return per Person:
+          <strong>${formatNumber(data.currentRoundSummary.publicShare)}</strong><br />
+          当前累计资金排名已更新。<br />
+          The wealth ranking has been updated.
+        `;
+      } else if (data.status === "collecting") {
+        roundResultText.innerHTML = `
+          第 ${data.currentRound} 轮进行中。<br />
+          Round ${data.currentRound} is open.<br /><br />
+          你可以随时点击“结束本轮”。<br />
+          You may end the round at any time.
+        `;
+      } else {
+        roundResultText.innerHTML = `
+          尚未结束任何轮次。<br />
+          No round has been closed yet.
+        `;
+      }
 
       joinUrlNode.textContent = data.joinUrl;
       qrImage.src =

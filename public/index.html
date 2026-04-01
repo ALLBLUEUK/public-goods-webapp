@@ -35,35 +35,35 @@
           </div>
         </header>
 
-        <section class="teacher-layout">
-          <article class="card card-span setup-card">
-            <div class="split-head">
-              <div>
-                <h3>课堂设置 Classroom Setup</h3>
-                <p class="muted">先配置，再让学生扫码进入。开始第一轮后需重置才能改参数。</p>
-              </div>
+        <article class="card teacher-setup-bar">
+          <div class="split-head">
+            <div>
+              <h3>课堂设置 Classroom Setup</h3>
+              <p class="muted">先设置人数、轮次和每轮初始资金，再让学生扫码进入。开始第一轮后如需修改，请先重置。</p>
             </div>
-            <form id="configForm" class="config-grid">
-              <label>
-                <span>人数 Players</span>
-                <input id="seatCountInput" type="number" min="2" value="6" />
-              </label>
-              <label>
-                <span>轮次 Rounds</span>
-                <input id="maxRoundsInput" type="number" min="1" value="5" />
-              </label>
-              <label>
-                <span>每轮初始资金 Endowment</span>
-                <input id="endowmentInput" type="number" min="1" max="1000" value="10" />
-              </label>
-              <label>
-                <span>每 1 点公共投入给每人带来的回报 Return per public point</span>
-                <input id="multiplierInput" type="number" min="0.1" max="10" step="0.1" value="0.5" />
-              </label>
-              <button class="button" type="submit">保存设置 Save Settings</button>
-            </form>
-          </article>
+          </div>
+          <form id="configForm" class="config-grid">
+            <label>
+              <span>人数 Players</span>
+              <input id="seatCountInput" type="number" min="2" value="6" />
+            </label>
+            <label>
+              <span>轮次 Planned Rounds</span>
+              <input id="maxRoundsInput" type="number" min="1" value="5" />
+            </label>
+            <label>
+              <span>每轮初始资金 Endowment per Round</span>
+              <input id="endowmentInput" type="number" min="1" max="1000" value="10" />
+            </label>
+            <label>
+              <span>每 1 点公共投入给每人的回报 Return per Public Point</span>
+              <input id="multiplierInput" type="number" min="0.1" max="10" step="0.1" value="0.5" />
+            </label>
+            <button class="button" type="submit">保存设置 Save Settings</button>
+          </form>
+        </article>
 
+        <section class="teacher-layout">
           <article class="card rules-card">
             <h3>投屏规则 Rules for Projection</h3>
             <div id="teacherRules" class="rules-text"></div>
@@ -79,15 +79,19 @@
             <div class="kpi-grid">
               <div class="kpi-box">
                 <span class="kpi-label">当前轮次 Current Round</span>
-                <strong id="currentRoundValue">0 / 0</strong>
+                <strong id="currentRoundValue">0</strong>
+              </div>
+              <div class="kpi-box">
+                <span class="kpi-label">计划轮次 Planned Rounds</span>
+                <strong id="plannedRoundsValue">0</strong>
               </div>
               <div class="kpi-box">
                 <span class="kpi-label">已加入 Joined</span>
-                <strong id="joinedCountValue">0 / 0</strong>
+                <strong id="joinedCountValue">0</strong>
               </div>
               <div class="kpi-box">
                 <span class="kpi-label">已提交 Submitted</span>
-                <strong id="submittedCountValue">0 / 0</strong>
+                <strong id="submittedCountValue">0</strong>
               </div>
               <div class="kpi-box accent-box">
                 <span class="kpi-label">本轮总投入 Total Contribution</span>
@@ -97,6 +101,14 @@
                 <span class="kpi-label">每人公共回报 Public Return per Person</span>
                 <strong id="roundShareValue">--</strong>
               </div>
+            </div>
+          </article>
+
+          <article class="card result-card">
+            <h3>本轮结果 Round Result</h3>
+            <div id="roundResultText" class="result-text">
+              尚未结束任何轮次。<br />
+              No round has been closed yet.
             </div>
           </article>
 

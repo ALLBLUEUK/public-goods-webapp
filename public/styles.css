@@ -111,6 +111,10 @@ h2 {
   margin: 22px 0 14px;
 }
 
+.teacher-setup-bar {
+  margin-bottom: 16px;
+}
+
 .teacher-layout {
   display: grid;
   grid-template-columns: 1.2fr 1fr 1fr;
@@ -133,6 +137,13 @@ h2 {
 
 .card-span {
   grid-column: 1 / -1;
+}
+
+.split-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
 }
 
 .button,
@@ -271,6 +282,16 @@ select {
 
 .rules-text p {
   margin-bottom: 10px;
+}
+
+.result-text {
+  font-size: 22px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.result-card {
+  background: linear-gradient(135deg, #f8fdf9, #fff8ef);
 }
 
 .rules-text ul {
