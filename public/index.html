@@ -39,7 +39,7 @@
           <div class="split-head">
             <div>
               <h3>课堂设置 Classroom Setup</h3>
-              <p class="muted">先设置人数、轮次和每轮初始资金，再让学生扫码进入。开始第一轮后如需修改，请先重置。</p>
+              <p class="muted">先设置人数、轮次和初始资金，再让学生扫码进入。开始第一轮后如需修改，请先重置。 Set players, rounds, and initial wealth before students join. Reset before changing them after Round 1 starts.</p>
             </div>
           </div>
           <form id="configForm" class="config-grid">
@@ -123,7 +123,7 @@
           </article>
 
           <article class="card">
-            <h3>参与状态 Seats</h3>
+            <h3>参与者 Participants</h3>
             <div id="seatBoard" class="seat-board"></div>
           </article>
 
@@ -167,7 +167,7 @@
           </div>
           <div class="status-row">
             <span class="pill" id="studentStatus">加载中</span>
-            <span class="pill" id="studentSeatBadge">Seat --</span>
+            <span class="pill" id="studentSeatBadge">ID --</span>
           </div>
         </header>
 
@@ -185,7 +185,7 @@
               </label>
               <button class="button" type="submit">进入 Join</button>
             </form>
-            <p class="tiny muted" id="joinTip">进入后你只能看到自己的投入和自己的累计资金。</p>
+            <p class="tiny muted" id="joinTip">进入后你只能看到自己的投入和自己的累计资金。 After joining, you can only see your own decisions and wealth.</p>
           </article>
 
           <article class="card">
@@ -196,7 +196,7 @@
           <div id="studentWorkspace" class="hidden student-grid">
             <article class="card">
               <h3>本轮决策 Current Decision</h3>
-              <p class="muted" id="studentInstruction">等待教师开始本轮。 Waiting for the teacher.</p>
+              <p class="muted" id="studentInstruction">等待教师开始本轮。 Waiting for the teacher to open the round.</p>
               <form id="submitForm" class="decision-grid">
                 <label>
                   <span>本轮投入 Contribution This Round</span>
