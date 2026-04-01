@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: public-goods-webapp
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/meta
+    autoDeploy: true

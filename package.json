@@ -1,0 +1,9 @@
+{
+  "name": "public-goods-webapp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lightweight classroom public goods game web app",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

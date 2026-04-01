@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>公共账户课堂实验</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Public Goods Classroom Game</p>
+          <h1>公共账户课堂实验</h1>
+          <p class="subcopy">
+            学生端只做两件事：投多少、看自己怎么算分。教师端控制轮次、收集提交、公布全班总投入。
+          </p>
+        </div>
+        <div class="hero-actions" id="homeActions">
+          <a class="button" href="/?role=student">进入学生端</a>
+          <a class="button button-secondary" href="/?role=teacher">进入教师端</a>
+        </div>
+      </section>
+
+      <section class="panel hidden" id="teacherPanel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Teacher Console</p>
+            <h2>教师端</h2>
+          </div>
+          <div class="pill-row">
+            <span class="pill" id="teacherStatus">加载中</span>
+            <span class="pill" id="teacherSessionCode">房间码 --</span>
+          </div>
+        </div>
+
+        <div class="teacher-grid">
+          <article class="card">
+            <h3>加入链接</h3>
+            <p class="muted">学生扫码或打开这个链接即可进入。</p>
+            <div class="link-box" id="joinUrl">加载中</div>
+            <img class="qr" id="qrImage" alt="学生加入二维码" />
+            <p class="tiny muted">二维码使用在线生成服务。如果学校网络拦截，直接让学生输入上方网址即可。</p>
+          </article>
+
+          <article class="card">
+            <h3>课堂控制</h3>
+            <div class="button-stack">
+              <button class="button" id="startRoundButton">开始下一轮</button>
+              <button class="button button-secondary" id="closeRoundButton">关闭本轮并结算</button>
+              <button class="button button-danger" id="resetButton">重置整场实验</button>
+            </div>
+            <div class="stat-grid">
+              <div>
+                <span class="stat-label">当前轮次</span>
+                <strong id="currentRoundValue">0 / 5</strong>
+              </div>
+              <div>
+                <span class="stat-label">已加入</span>
+                <strong id="joinedCountValue">0 / 6</strong>
+              </div>
+              <div>
+                <span class="stat-label">已提交</span>
+                <strong id="submittedCountValue">0 / 6</strong>
+              </div>
+              <div>
+                <span class="stat-label">讨论提示</span>
+                <strong id="discussionHint">第 4 轮前讨论</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="card">
+            <h3>本轮信息</h3>
+            <div class="round-board">
+              <div>
+                <span class="stat-label">全班总投入</span>
+                <strong id="roundTotalValue">--</strong>
+              </div>
+              <div>
+                <span class="stat-label">每人公共回报</span>
+                <strong id="roundShareValue">--</strong>
+              </div>
+            </div>
+            <div id="seatBoard" class="seat-board"></div>
+          </article>
+
+          <article class="card card-wide">
+            <h3>5 轮汇总</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>轮次</th>
+                  <th>全班总投入</th>
+                  <th>每人公共回报</th>
+                </tr>
+              </thead>
+              <tbody id="historyTable"></tbody>
+            </table>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel hidden" id="studentPanel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Student View</p>
+            <h2>学生端</h2>
+          </div>
+          <div class="pill-row">
+            <span class="pill" id="studentStatus">加载中</span>
+            <span class="pill" id="studentSeatBadge">座位 --</span>
+          </div>
+        </div>
+
+        <article class="card" id="joinCard">
+          <h3>进入实验</h3>
+          <p class="muted">每个人选一个固定座位号，整场 5 轮都用同一个设备提交。</p>
+          <form id="joinForm" class="join-form">
+            <label>
+              <span>座位号</span>
+              <select id="seatInput">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+              </select>
+            </label>
+            <label>
+              <span>名字，可留空</span>
+              <input id="nameInput" maxlength="20" placeholder="如：A / 1号 / 留空" />
+            </label>
+            <button class="button" type="submit">进入</button>
+          </form>
+          <p class="tiny muted" id="joinTip">进入后，系统只显示你自己的得分记录。</p>
+        </article>
+
+        <div id="studentWorkspace" class="hidden">
+          <article class="card">
+            <h3>本轮决策</h3>
+            <p class="muted" id="studentInstruction">等待教师开始本轮。</p>
+            <form id="submitForm" class="decision-form">
+              <label>
+                <span>投入公共账户</span>
+                <input id="contributionInput" type="number" min="0" max="10" step="1" value="0" />
+              </label>
+              <button class="button" type="submit">提交本轮投入</button>
+            </form>
+            <div class="round-board">
+              <div>
+                <span class="stat-label">本轮总投入</span>
+                <strong id="studentRoundTotal">--</strong>
+              </div>
+              <div>
+                <span class="stat-label">每人公共回报</span>
+                <strong id="studentRoundShare">--</strong>
+              </div>
+              <div>
+                <span class="stat-label">累计得分</span>
+                <strong id="studentCumulative">0</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="card">
+            <h3>我的 5 轮记录</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>轮次</th>
+                  <th>我投了</th>
+                  <th>本轮总投入</th>
+                  <th>我本轮得分</th>
+                  <th>累计</th>
+                </tr>
+              </thead>
+              <tbody id="studentHistory"></tbody>
+            </table>
+          </article>
+        </div>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>
