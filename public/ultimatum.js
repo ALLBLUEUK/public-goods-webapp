@@ -180,13 +180,17 @@ function initTeacher() {
         "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=" +
         encodeURIComponent(data.joinUrl);
 
-      document.getElementById("stageRolesText").innerHTML = `
-        阶段 1 提出者 Stage 1 proposers: <strong>${data.stageRoles[1].proposers.join(", ") || "--"}</strong><br />
-        阶段 1 回应者 Stage 1 responders: <strong>${data.stageRoles[1].responders.join(", ") || "--"}</strong><br />
-        阶段 2 提出者 Stage 2 proposers: <strong>${data.stageRoles[2].proposers.join(", ") || "--"}</strong><br />
-        阶段 2 回应者 Stage 2 responders: <strong>${data.stageRoles[2].responders.join(", ") || "--"}</strong><br />
-        可用学生编号 Open student IDs: <strong>${data.openIds.join(", ") || "none"}</strong>
-      `;
+      document.getElementById("stageRolesText").innerHTML = data.status === "setup"
+        ? `
+          <p>教师尚未保存设置，学生还不能进入。</p>
+          <p>The teacher has not saved the setup yet, so students cannot join.</p>
+        `
+        : `
+          <p>阶段 1：提出者 ${data.stageRoles[1].proposers.length} 人，回应者 ${data.stageRoles[1].responders.length} 人。</p>
+          <p>Stage 1: ${data.stageRoles[1].proposers.length} proposers and ${data.stageRoles[1].responders.length} responders.</p>
+          <p>阶段 2 将整体交换角色。Stage 2 will swap the roles.</p>
+          <p>当前可加入人数 Remaining slots: <strong>${data.openIds.length}</strong></p>
+        `;
 
       const round = data.currentRoundDetail;
       document.getElementById("roundResults").innerHTML =
@@ -195,7 +199,7 @@ function initTeacher() {
               .map(
                 (pair) => `
                   <p>
-                    提出者 ${pair.proposerId} 报价 ${pair.offer} / Proposer ${pair.proposerId} offered ${pair.offer},
+                    第 ${pair.pairNumber} 组 / Pair ${pair.pairNumber}: offer ${pair.offer},
                     ${pair.accepted ? "成交 accepted" : "拒绝 rejected"},
                     ${pair.proposerPayoff} / ${pair.responderPayoff}
                   </p>
@@ -204,10 +208,10 @@ function initTeacher() {
               .join("")
           : round
             ? `
-                <p>报价已提交: ${round.submittedOffers.join(", ") || "--"} / Offers received</p>
-                <p>回应已提交: ${round.submittedResponses.join(", ") || "--"} / Responses received</p>
-                <p>待报价 ID: ${round.pendingOffers.join(", ") || "--"}</p>
-                <p>待回应 ID: ${round.pendingResponses.join(", ") || "--"}</p>
+                <p>已收到报价 ${round.submittedOffers.length} 份 / Offers received: ${round.submittedOffers.length}</p>
+                <p>已收到回应 ${round.submittedResponses.length} 份 / Responses received: ${round.submittedResponses.length}</p>
+                <p>待报价人数 Remaining proposers: ${round.pendingOffers.length}</p>
+                <p>待回应人数 Remaining responders: ${round.pendingResponses.length}</p>
               `
             : "暂无已结算结果 / No settled round yet.";
 
@@ -331,6 +335,7 @@ function initStudent() {
   const joinCard = document.getElementById("joinCard");
   const joinForm = document.getElementById("joinForm");
   const joinTip = document.getElementById("joinTip");
+  const joinButton = joinForm.querySelector("button");
   const studentWorkspace = document.getElementById("studentWorkspace");
   const proposerCard = document.getElementById("proposerCard");
   const responderCard = document.getElementById("responderCard");
@@ -352,7 +357,11 @@ function initStudent() {
       if (!token) {
         setText("studentStatus", "等待进入 Waiting");
         setText("studentIdBadge", "ID --");
-        joinTip.textContent = `可用编号 Open IDs: ${meta.openIds.join(", ") || "none"}`;
+        joinButton.disabled = !meta.joinOpen;
+        document.getElementById("playerNameInput").disabled = !meta.joinOpen;
+        joinTip.textContent = meta.joinOpen
+          ? `当前还有 ${meta.openIds.length} 个空位。系统会随机分配匿名编号。There are ${meta.openIds.length} open slots, and the system will assign an anonymous ID at random.`
+          : "教师还没有完成设置，学生暂时不能进入。Students cannot join until the teacher saves the setup.";
         return;
       }
 
@@ -444,7 +453,7 @@ function initStudent() {
       const data = await request("/api/ultimatum/student/join", {
         method: "POST",
         body: {
-          id: Number(document.getElementById("playerIdInput").value),
+          name: document.getElementById("playerNameInput").value.trim(),
           token,
         },
       });

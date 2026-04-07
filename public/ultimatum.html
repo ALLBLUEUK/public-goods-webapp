@@ -41,7 +41,7 @@
           <div class="split-head">
             <div>
               <h3>课堂设置 Classroom Setup</h3>
-              <p class="muted">先设置人数和阶段轮数，再让学生按编号进入。若学生人数为奇数，可勾选“教师补位”。</p>
+              <p class="muted">先由教师保存设置。保存之前学生不能进入。保存后学生输入名字进入，系统会自动分配匿名编号。若学生人数为奇数，可勾选“教师补位”。</p>
             </div>
           </div>
           <form id="ultimatumConfigForm" class="config-grid">
@@ -113,16 +113,14 @@
 
           <article class="card result-card">
             <h3>阶段角色 Stage Roles</h3>
-            <div class="rules-text">
-              <p id="stageRolesText">Waiting</p>
-            </div>
+            <div class="rules-text" id="stageRolesText">Waiting</div>
           </article>
 
           <article class="card join-card">
             <h3>学生入口 Student Entry</h3>
             <div class="link-box" id="joinUrl">Loading</div>
             <img class="qr" id="ultimatumQr" alt="Join QR code" />
-            <p class="tiny muted">学生只输入编号，不输入姓名。Students join with ID numbers only.</p>
+            <p class="tiny muted">学生只输入名字，系统自动分配匿名编号。Students enter with names, and the system assigns anonymous IDs automatically.</p>
           </article>
 
           <article class="card">
@@ -169,15 +167,15 @@
         <section class="student-layout">
           <article class="card" id="joinCard">
             <h3>进入实验 Join the Session</h3>
-            <p class="muted">请输入你的编号。编号不能重复。Do not use an ID that has already been taken.</p>
+            <p class="muted">教师保存设置之前，学生不能进入。保存之后，请输入你的名字或代号。系统会自动分配匿名编号。</p>
             <form id="joinForm" class="config-grid">
               <label>
-                <span>编号 ID</span>
-                <input id="playerIdInput" type="number" min="1" max="8" />
+                <span>名字或代号 Name / Alias</span>
+                <input id="playerNameInput" maxlength="30" />
               </label>
               <button class="button" type="submit">进入 Join</button>
             </form>
-            <p class="tiny muted" id="joinTip">如果教师设置为奇数补位，最高编号可能由教师占用。The highest ID may be reserved for the teacher when the class size is odd.</p>
+            <p class="tiny muted" id="joinTip">系统会随机分配匿名编号。你的交易对象是谁，系统不会告诉你。The system will assign an anonymous ID at random, and it will not tell you who your counterpart is.</p>
           </article>
 
           <article class="card">

@@ -301,6 +301,7 @@ function createUltimatumParticipants(count, teacherJoinsIfOdd) {
   for (let id = 1; id <= count; id += 1) {
     participants.push({
       id,
+      name: "",
       token: "",
       joined: false,
       isTeacher: false,
@@ -312,6 +313,7 @@ function createUltimatumParticipants(count, teacherJoinsIfOdd) {
   if (count % 2 === 1 && teacherJoinsIfOdd) {
     participants.push({
       id: count + 1,
+      name: "Teacher",
       token: "teacher",
       joined: true,
       isTeacher: true,
@@ -501,6 +503,7 @@ function ultimatumRanking() {
     .filter((item) => item.joined && !item.isTeacher)
     .map((item) => ({
       id: item.id,
+      name: item.name,
       cumulative: item.cumulative,
     }))
     .sort((a, b) => b.cumulative - a.cumulative || a.id - b.id);
@@ -521,6 +524,9 @@ function ultimatumBaseState(origin) {
     joinedStudentCount: ultimatumState.participants.filter(
       (item) => item.joined && !item.isTeacher
     ).length,
+    joinOpen:
+      ultimatumState.status === "lobby" &&
+      ultimatumState.currentRound === 0,
     totalActivePlayers: totalPlayers,
     openIds: getUltimatumOpenIds(),
     teacherUrl: `${origin}/ultimatum.html?role=teacher`,
@@ -553,6 +559,7 @@ function ultimatumTeacherState(origin) {
     ...ultimatumBaseState(origin),
     participants: ultimatumState.participants.map((item) => ({
       id: item.id,
+      name: item.name,
       joined: item.joined,
       isTeacher: item.isTeacher,
       cumulative: item.cumulative,
@@ -572,6 +579,7 @@ function ultimatumTeacherState(origin) {
           revealedPairs:
             round.status === "closed"
               ? round.pairs.map((pair) => ({
+                  pairNumber: round.pairs.indexOf(pair) + 1,
                   proposerId: pair.proposerId,
                   offer: pair.offer,
                   accepted: pair.accepted,
@@ -1108,9 +1116,18 @@ async function handleUltimatumApi(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/ultimatum/student/join") {
     const body = await getRequestBody(req);
     const token = typeof body.token === "string" ? body.token : "";
-    const requestedId = Number(body.id);
-    if (!Number.isInteger(requestedId)) {
-      sendJson(res, 400, { error: "Please enter a valid ID number." });
+    const name = typeof body.name === "string" ? body.name.trim().slice(0, 30) : "";
+    const normalized = normalizeName(name);
+
+    if (ultimatumState.status === "setup") {
+      sendJson(res, 409, {
+        error: "The teacher has not saved the ultimatum settings yet.",
+      });
+      return;
+    }
+
+    if (!name) {
+      sendJson(res, 400, { error: "Please enter your name or alias." });
       return;
     }
 
@@ -1119,35 +1136,49 @@ async function handleUltimatumApi(req, res, url) {
       sendJson(res, 200, {
         token: participant.token,
         id: participant.id,
+        name: participant.name,
         sessionCode: ultimatumState.sessionCode,
       });
       return;
     }
 
-    participant =
-      ultimatumState.participants.find(
-        (item) => item.id === requestedId && !item.isTeacher
-      ) || null;
-    if (!participant) {
-      sendJson(res, 409, { error: "That ID is unavailable." });
-      return;
-    }
-
-    if (participant.joined && participant.token) {
+    const sameNameParticipant = ultimatumState.participants.find(
+      (item) => item.joined && !item.isTeacher && normalizeName(item.name) === normalized
+    );
+    if (sameNameParticipant) {
       sendJson(res, 200, {
-        token: participant.token,
-        id: participant.id,
+        token: sameNameParticipant.token,
+        id: sameNameParticipant.id,
+        name: sameNameParticipant.name,
         sessionCode: ultimatumState.sessionCode,
         rejoined: true,
       });
       return;
     }
 
+    if (!(ultimatumState.status === "lobby" && ultimatumState.currentRound === 0)) {
+      sendJson(res, 409, {
+        error: "New players can only join before Round 1 starts.",
+      });
+      return;
+    }
+
+    const available = shuffle(
+      ultimatumState.participants.filter((item) => !item.joined && !item.isTeacher)
+    );
+    participant = available[0] || null;
+    if (!participant) {
+      sendJson(res, 409, { error: "All participant slots are already full." });
+      return;
+    }
+
     participant.token = crypto.randomUUID();
     participant.joined = true;
+    participant.name = name;
     sendJson(res, 200, {
       token: participant.token,
       id: participant.id,
+      name: participant.name,
       sessionCode: ultimatumState.sessionCode,
     });
     return;
@@ -1176,6 +1207,7 @@ async function handleUltimatumApi(req, res, url) {
       ...ultimatumBaseState(origin),
       participant: {
         id: participant.id,
+        name: participant.name,
         cumulative: participant.cumulative,
         history: participant.history,
       },
