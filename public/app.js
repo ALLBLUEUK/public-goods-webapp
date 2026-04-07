@@ -96,9 +96,10 @@ function initTeacher() {
   const resetButton = document.getElementById("resetButton");
 
   let configSynced = false;
+  let configDirty = false;
 
   function syncConfigInputs(settings, force = false) {
-    if (!force && configSynced) {
+    if (!force && (configSynced || configDirty)) {
       return;
     }
     seatCountInput.value = settings.seatCount;
@@ -235,6 +236,7 @@ function initTeacher() {
           multiplier: Number(multiplierInput.value),
         },
       });
+      configDirty = false;
       syncConfigInputs(response.settings, true);
       await refreshTeacher();
     } catch (error) {
@@ -267,10 +269,20 @@ function initTeacher() {
     try {
       await request("/api/teacher/reset", { method: "POST" });
       configSynced = false;
+      configDirty = false;
       await refreshTeacher();
     } catch (error) {
       alert(error.message);
     }
+  });
+
+  [seatCountInput, maxRoundsInput, endowmentInput, multiplierInput].forEach((input) => {
+    input.addEventListener("input", () => {
+      configDirty = true;
+    });
+    input.addEventListener("change", () => {
+      configDirty = true;
+    });
   });
 
   refreshTeacher();

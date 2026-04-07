@@ -70,9 +70,10 @@ function initTeacher() {
   const resetButton = document.getElementById("resetUltimatumButton");
 
   let configSynced = false;
+  let configDirty = false;
 
   function syncConfig(settings, force = false) {
-    if (!force && configSynced) {
+    if (!force && (configSynced || configDirty)) {
       return;
     }
     studentCountInput.value = settings.studentCount;
@@ -292,6 +293,7 @@ function initTeacher() {
           teacherJoinsIfOdd: teacherJoinInput.value === "true",
         },
       });
+      configDirty = false;
       syncConfig(response.settings, true);
       await refreshTeacher();
     } catch (error) {
@@ -333,10 +335,20 @@ function initTeacher() {
     try {
       await request("/api/ultimatum/teacher/reset", { method: "POST" });
       configSynced = false;
+      configDirty = false;
       await refreshTeacher();
     } catch (error) {
       alert(error.message);
     }
+  });
+
+  [studentCountInput, phaseRoundsInput, pieSizeInput, teacherJoinInput].forEach((input) => {
+    input.addEventListener("input", () => {
+      configDirty = true;
+    });
+    input.addEventListener("change", () => {
+      configDirty = true;
+    });
   });
 
   refreshTeacher();
