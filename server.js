@@ -126,8 +126,8 @@ function publicState(origin) {
     discussionAfterRound: state.discussionAfterRound,
     settings: state.settings,
     joinedCount: state.players.filter((player) => player.token).length,
-    joinUrl: `${origin}/?role=student`,
-    teacherUrl: `${origin}/?role=teacher`,
+    joinUrl: `${origin}/public-goods.html?role=student`,
+    teacherUrl: `${origin}/public-goods.html?role=teacher`,
     players: state.players.map((player) => ({
       seat: player.seat,
       name: player.name,
