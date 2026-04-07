@@ -46,6 +46,22 @@ async function request(url, options = {}) {
   return data;
 }
 
+function getTokenFromUrl() {
+  return new URLSearchParams(window.location.search).get("token") || "";
+}
+
+function persistStudentToken(token) {
+  const url = new URL(window.location.href);
+  if (token) {
+    window.localStorage.setItem(studentTokenKey, token);
+    url.searchParams.set("token", token);
+  } else {
+    window.localStorage.removeItem(studentTokenKey);
+    url.searchParams.delete("token");
+  }
+  window.history.replaceState({}, "", url.toString());
+}
+
 function buildRules(settings) {
   return `
     <p><strong>中文</strong></p>
@@ -272,7 +288,10 @@ function initStudent() {
   const contributionInput = document.getElementById("contributionInput");
   const studentHistory = document.getElementById("studentHistory");
 
-  let token = window.localStorage.getItem(studentTokenKey) || "";
+  let token = getTokenFromUrl() || window.localStorage.getItem(studentTokenKey) || "";
+  if (token) {
+    persistStudentToken(token);
+  }
 
   async function refreshStudent() {
     try {
@@ -343,7 +362,7 @@ function initStudent() {
         : `<tr><td colspan="7">暂无已结算轮次 / No settled rounds yet.</td></tr>`;
     } catch (error) {
       if (token) {
-        window.localStorage.removeItem(studentTokenKey);
+        persistStudentToken("");
         token = "";
       }
       joinCard.classList.remove("hidden");
@@ -364,7 +383,7 @@ function initStudent() {
         },
       });
       token = data.token;
-      window.localStorage.setItem(studentTokenKey, token);
+      persistStudentToken(token);
       await refreshStudent();
     } catch (error) {
       joinTip.textContent = error.message;

@@ -809,7 +809,13 @@ async function handlePublicGoodsApi(req, res, url) {
       (player) => player.token && normalizeName(player.name) === normalized
     );
     if (sameNamePlayer && sameNamePlayer.token !== token) {
-      sendJson(res, 409, { error: "This name is already in use." });
+      sendJson(res, 200, {
+        token: sameNamePlayer.token,
+        seat: sameNamePlayer.seat,
+        name: sameNamePlayer.name,
+        sessionCode: publicGoodsState.sessionCode,
+        rejoined: true,
+      });
       return;
     }
 
@@ -1120,10 +1126,20 @@ async function handleUltimatumApi(req, res, url) {
 
     participant =
       ultimatumState.participants.find(
-        (item) => item.id === requestedId && !item.joined && !item.isTeacher
+        (item) => item.id === requestedId && !item.isTeacher
       ) || null;
     if (!participant) {
       sendJson(res, 409, { error: "That ID is unavailable." });
+      return;
+    }
+
+    if (participant.joined && participant.token) {
+      sendJson(res, 200, {
+        token: participant.token,
+        id: participant.id,
+        sessionCode: ultimatumState.sessionCode,
+        rejoined: true,
+      });
       return;
     }
 

@@ -31,6 +31,22 @@ async function request(url, options = {}) {
   return data;
 }
 
+function getTokenFromUrl() {
+  return new URLSearchParams(window.location.search).get("token") || "";
+}
+
+function persistStudentToken(token) {
+  const url = new URL(window.location.href);
+  if (token) {
+    window.localStorage.setItem(tokenKey, token);
+    url.searchParams.set("token", token);
+  } else {
+    window.localStorage.removeItem(tokenKey);
+    url.searchParams.delete("token");
+  }
+  window.history.replaceState({}, "", url.toString());
+}
+
 function pct(value) {
   return value == null ? "--" : `${Math.round(value * 100)}%`;
 }
@@ -324,7 +340,10 @@ function initStudent() {
   const rejectButton = document.getElementById("rejectButton");
   const studentHistory = document.getElementById("studentHistory");
 
-  let token = window.localStorage.getItem(tokenKey) || "";
+  let token = getTokenFromUrl() || window.localStorage.getItem(tokenKey) || "";
+  if (token) {
+    persistStudentToken(token);
+  }
 
   async function refreshStudent() {
     try {
@@ -409,7 +428,7 @@ function initStudent() {
         : `<tr><td colspan="7">暂无记录 / No record yet.</td></tr>`;
     } catch (error) {
       if (token) {
-        window.localStorage.removeItem(tokenKey);
+        persistStudentToken("");
         token = "";
       }
       joinCard.classList.remove("hidden");
@@ -430,7 +449,7 @@ function initStudent() {
         },
       });
       token = data.token;
-      window.localStorage.setItem(tokenKey, token);
+      persistStudentToken(token);
       await refreshStudent();
     } catch (error) {
       joinTip.textContent = error.message;
