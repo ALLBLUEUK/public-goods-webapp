@@ -287,6 +287,7 @@ function initStudent() {
   const submitForm = document.getElementById("submitForm");
   const contributionInput = document.getElementById("contributionInput");
   const studentHistory = document.getElementById("studentHistory");
+  const joinButton = joinForm.querySelector("button");
 
   let token = getTokenFromUrl() || window.localStorage.getItem(studentTokenKey) || "";
   if (token) {
@@ -302,6 +303,12 @@ function initStudent() {
         setText("studentStatus", "等待进入 Waiting");
         setText("studentSeatBadge", "Participant --");
         setText("studentAvailableWealth", "0");
+        const joinOpen = meta.status === "lobby" && meta.currentRound === 0;
+        nameInput.disabled = !joinOpen;
+        joinButton.disabled = !joinOpen;
+        joinTip.textContent = joinOpen
+          ? "请输入名字或代号后进入。Enter your name or alias to join."
+          : "教师还没有完成设置，或第一轮已经开始。Students can only join after setup is saved and before Round 1 starts.";
         return;
       }
 

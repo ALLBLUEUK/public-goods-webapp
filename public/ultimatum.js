@@ -241,6 +241,25 @@ function initTeacher() {
             .join("")
         : `<tr><td colspan="5">暂无分析数据 / No analysis yet.</td></tr>`;
 
+      const finalRevealCard = document.getElementById("finalRevealCard");
+      const finalRevealTable = document.getElementById("finalRevealTable");
+      finalRevealCard.classList.toggle("hidden", data.status !== "finished");
+      finalRevealTable.innerHTML =
+        data.status === "finished" && data.ranking.length
+          ? data.ranking
+              .map(
+                (item, index) => `
+                  <tr>
+                    <td>${index + 1}</td>
+                    <td>${item.id}</td>
+                    <td>${item.name || "-"}</td>
+                    <td>${formatNumber(item.cumulative)}</td>
+                  </tr>
+                `
+              )
+              .join("")
+          : `<tr><td colspan="4">等待全部轮次结束 / Waiting for all rounds to finish.</td></tr>`;
+
       renderTeacherSelfAction(data);
 
       const locked = data.currentRound > 0 || data.joinedStudentCount > 0;

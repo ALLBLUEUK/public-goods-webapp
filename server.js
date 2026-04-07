@@ -808,6 +808,20 @@ async function handlePublicGoodsApi(req, res, url) {
     const name = typeof body.name === "string" ? body.name.trim().slice(0, 30) : "";
     const normalized = normalizeName(name);
 
+    if (publicGoodsState.status === "setup") {
+      sendJson(res, 409, {
+        error: "The teacher has not saved the public goods settings yet.",
+      });
+      return;
+    }
+
+    if (!(publicGoodsState.status === "lobby" && publicGoodsState.currentRound === 0)) {
+      sendJson(res, 409, {
+        error: "New players can only join before Round 1 starts.",
+      });
+      return;
+    }
+
     if (!name) {
       sendJson(res, 400, { error: "Name or alias cannot be empty." });
       return;
