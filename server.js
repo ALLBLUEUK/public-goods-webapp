@@ -360,8 +360,8 @@ function validateUltimatumSettings(settings) {
   const pieSize = Number(settings.pieSize);
   const teacherJoinsIfOdd = Boolean(settings.teacherJoinsIfOdd);
 
-  if (!Number.isInteger(studentCount) || studentCount < 2 || studentCount > 40) {
-    throw new Error("Student count must be an integer between 2 and 40.");
+  if (!Number.isInteger(studentCount) || studentCount < 1 || studentCount > 40) {
+    throw new Error("Student count must be an integer between 1 and 40.");
   }
   if (!Number.isInteger(phaseRounds) || phaseRounds < 2 || phaseRounds > 4) {
     throw new Error("Rounds per phase must be an integer between 2 and 4.");
