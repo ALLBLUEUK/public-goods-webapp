@@ -68,9 +68,12 @@ function initTeacher() {
   const closeProposersButton = document.getElementById("closeProposersButton");
   const closeRespondersButton = document.getElementById("closeRespondersButton");
   const resetButton = document.getElementById("resetUltimatumButton");
+  const teacherSelfActionNode = document.getElementById("teacherSelfAction");
 
   let configSynced = false;
   let configDirty = false;
+  let teacherActionDirty = false;
+  let lastTeacherActionKey = "";
 
   function syncConfig(settings, force = false) {
     if (!force && (configSynced || configDirty)) {
@@ -84,15 +87,26 @@ function initTeacher() {
   }
 
   function renderTeacherSelfAction(data) {
-    const node = document.getElementById("teacherSelfAction");
     const action = data.teacherAction;
+    const actionKey = JSON.stringify({
+      participantId: action?.participantId ?? null,
+      role: action?.role ?? null,
+      roundStatus: action?.roundStatus ?? null,
+      responseOffer: action?.responseOffer ?? null,
+      hasSubmitted: action?.hasSubmitted ?? null,
+    });
+    if (teacherActionDirty && actionKey === lastTeacherActionKey) {
+      return;
+    }
+    lastTeacherActionKey = actionKey;
+    teacherActionDirty = false;
     if (!action) {
-      node.innerHTML = "教师未参与本场实验。<br />Teacher is not participating in this session.";
+      teacherSelfActionNode.innerHTML = "教师未参与本场实验。<br />Teacher is not participating in this session.";
       return;
     }
 
     if (action.role === "proposer" && action.roundStatus === "proposer_collecting") {
-      node.innerHTML = `
+      teacherSelfActionNode.innerHTML = `
         <p>教师当前是提出者，编号 ID ${action.participantId}。</p>
         <p>Teacher is currently a proposer with ID ${action.participantId}.</p>
         <form id="teacherOfferForm" class="decision-grid">
@@ -103,6 +117,9 @@ function initTeacher() {
           <button class="button" type="submit" ${action.hasSubmitted ? "disabled" : ""}>提交教师报价 Submit Teacher Offer</button>
         </form>
       `;
+      document.getElementById("teacherOfferInput").addEventListener("input", () => {
+        teacherActionDirty = true;
+      });
       document.getElementById("teacherOfferForm").addEventListener("submit", async (event) => {
         event.preventDefault();
         try {
@@ -119,7 +136,7 @@ function initTeacher() {
     }
 
     if (action.role === "responder" && action.roundStatus === "responder_collecting") {
-      node.innerHTML = `
+      teacherSelfActionNode.innerHTML = `
         <p>教师当前是回应者，编号 ID ${action.participantId}。</p>
         <p>Teacher is currently a responder with ID ${action.participantId}.</p>
         <p>你收到的报价 / Offer received: <strong>${formatNumber(action.responseOffer)}</strong></p>
@@ -153,7 +170,7 @@ function initTeacher() {
       return;
     }
 
-    node.innerHTML = `
+    teacherSelfActionNode.innerHTML = `
       <p>教师编号 ID ${action.participantId} 已加入，但当前轮次无需教师操作。</p>
       <p>Teacher ID ${action.participantId} has joined, but no action is needed right now.</p>
     `;
@@ -304,6 +321,8 @@ function initTeacher() {
   startRoundButton.addEventListener("click", async () => {
     try {
       await request("/api/ultimatum/teacher/start-round", { method: "POST" });
+      teacherActionDirty = false;
+      lastTeacherActionKey = "";
       await refreshTeacher();
     } catch (error) {
       alert(error.message);
@@ -313,6 +332,8 @@ function initTeacher() {
   closeProposersButton.addEventListener("click", async () => {
     try {
       await request("/api/ultimatum/teacher/close-proposers", { method: "POST" });
+      teacherActionDirty = false;
+      lastTeacherActionKey = "";
       await refreshTeacher();
     } catch (error) {
       alert(error.message);
@@ -322,6 +343,8 @@ function initTeacher() {
   closeRespondersButton.addEventListener("click", async () => {
     try {
       await request("/api/ultimatum/teacher/close-responders", { method: "POST" });
+      teacherActionDirty = false;
+      lastTeacherActionKey = "";
       await refreshTeacher();
     } catch (error) {
       alert(error.message);
@@ -336,6 +359,8 @@ function initTeacher() {
       await request("/api/ultimatum/teacher/reset", { method: "POST" });
       configSynced = false;
       configDirty = false;
+      teacherActionDirty = false;
+      lastTeacherActionKey = "";
       await refreshTeacher();
     } catch (error) {
       alert(error.message);
