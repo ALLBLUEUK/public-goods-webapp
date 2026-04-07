@@ -3,23 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Public Goods Classroom Game</title>
+    <title>Public Goods Game</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main class="app-shell">
       <section class="hero" id="homeHero">
         <div class="hero-copy">
-          <p class="eyebrow">课堂公共品实验 | Public Goods Game</p>
-          <h1>扫码进入，在线决策，自动结算</h1>
+          <p class="eyebrow">Public Goods Game</p>
+          <h1>公共品博弈 Public Goods Game</h1>
           <p class="lead">
-            教师端负责设置人数与轮次、开始与结束轮次、展示全班总投入与资金排名。
-            学生端只做两件事：看规则，提交投入。
+            教师端负责设置、开关轮次和投屏展示。学生端扫码进入，只看到自己的资金与记录。
+            <br />
+            The teacher view controls the session and projection. The student view only shows each student's own wealth and history.
           </p>
         </div>
         <div class="hero-actions" id="homeActions">
-          <a class="button" href="/?role=teacher">教师端 Teacher</a>
-          <a class="button button-secondary" href="/?role=student">学生端 Student</a>
+          <a class="button" href="/public-goods.html?role=teacher">教师端 Teacher</a>
+          <a class="button button-secondary" href="/public-goods.html?role=student">学生端 Student</a>
+          <a class="button button-secondary" href="/">返回主页 Home</a>
         </div>
       </section>
 
@@ -30,7 +32,7 @@
             <h2>教师端 Teacher</h2>
           </div>
           <div class="status-row">
-            <span class="pill" id="teacherStatus">加载中</span>
+            <span class="pill" id="teacherStatus">Loading</span>
             <span class="pill" id="teacherSessionCode">Session --</span>
           </div>
         </header>
@@ -39,7 +41,9 @@
           <div class="split-head">
             <div>
               <h3>课堂设置 Classroom Setup</h3>
-              <p class="muted">先设置人数、轮次和初始资金，再让学生扫码进入。开始第一轮后如需修改，请先重置。 Set players, rounds, and initial wealth before students join. Reset before changing them after Round 1 starts.</p>
+              <p class="muted">
+                开始前先设置人数、轮次、初始资金和公共回报系数。学生加入或轮次开始后，如需修改，请先重置。
+              </p>
             </div>
           </div>
           <form id="configForm" class="config-grid">
@@ -52,11 +56,11 @@
               <input id="maxRoundsInput" type="number" min="1" value="5" />
             </label>
             <label>
-              <span>每轮初始资金 Endowment per Round</span>
+              <span>初始资金 Initial Wealth</span>
               <input id="endowmentInput" type="number" min="1" max="1000" value="10" />
             </label>
             <label>
-              <span>每 1 点公共投入给每人的回报 Return per Public Point</span>
+              <span>每 1 点公共投入给每个人的回报 Return per Public Point</span>
               <input id="multiplierInput" type="number" min="0.1" max="10" step="0.1" value="0.5" />
             </label>
             <button class="button" type="submit">保存设置 Save Settings</button>
@@ -106,20 +110,14 @@
 
           <article class="card result-card">
             <h3>本轮结果 Round Result</h3>
-            <div id="roundResultText" class="result-text">
-              尚未结束任何轮次。<br />
-              No round has been closed yet.
-            </div>
+            <div id="roundResultText" class="result-text">No round has been closed yet.</div>
           </article>
 
           <article class="card join-card">
             <h3>学生入口 Student Entry</h3>
-            <div class="link-box" id="joinUrl">加载中</div>
+            <div class="link-box" id="joinUrl">Loading</div>
             <img class="qr" id="qrImage" alt="Join QR code" />
-            <p class="muted tiny">
-              学生端只显示自己的记录，不显示其他人的投入。<br />
-              Student view only shows each student's own record.
-            </p>
+            <p class="muted tiny">学生端只显示自己的决策、资金和记录。Student view only shows each student's own decisions, wealth, and history.</p>
           </article>
 
           <article class="card">
@@ -133,7 +131,6 @@
               <thead>
                 <tr>
                   <th>排名 Rank</th>
-                  <th id="rankingIdHeader" class="hidden">编号 ID</th>
                   <th id="rankingNameHeader" class="hidden">姓名 Name</th>
                   <th>累计资金 Wealth</th>
                 </tr>
@@ -166,8 +163,8 @@
             <h2>学生端 Student</h2>
           </div>
           <div class="status-row">
-            <span class="pill" id="studentStatus">加载中</span>
-            <span class="pill" id="studentSeatBadge">ID --</span>
+            <span class="pill" id="studentStatus">Loading</span>
+            <span class="pill" id="studentSeatBadge">Participant --</span>
           </div>
         </header>
 
@@ -175,17 +172,18 @@
           <article class="card" id="joinCard">
             <h3>进入实验 Join the Session</h3>
             <p class="muted">
-              请输入你的姓名或代号。名字不能和已经进入的同学重复。整场实验中，同一位学生应使用同一台设备。<br />
-              Enter your name or alias. Duplicate names are not allowed. Use the same device for the whole game.
+              请输入你的名字或代号。名字不能重复。整场实验尽量使用同一台设备。
+              <br />
+              Enter your name or alias. Duplicate names are not allowed. Use the same device for the whole session.
             </p>
             <form id="joinForm" class="config-grid">
               <label>
-                <span>姓名或代号 Name / Alias</span>
+                <span>名字或代号 Name / Alias</span>
                 <input id="nameInput" maxlength="30" placeholder="例如 Example: A / Team 1" />
               </label>
               <button class="button" type="submit">进入 Join</button>
             </form>
-            <p class="tiny muted" id="joinTip">进入后你只能看到自己的投入和自己的累计资金。 After joining, you can only see your own decisions and wealth.</p>
+            <p class="tiny muted" id="joinTip">加入后你只能看到自己的投入和资金。After joining, you can only see your own decisions and wealth.</p>
           </article>
 
           <article class="card">
@@ -196,7 +194,7 @@
           <div id="studentWorkspace" class="hidden student-grid">
             <article class="card">
               <h3>本轮决策 Current Decision</h3>
-              <p class="muted" id="studentInstruction">等待教师开始本轮。 Waiting for the teacher to open the round.</p>
+              <p class="muted" id="studentInstruction">等待教师开始本轮。Waiting for the teacher to open the round.</p>
               <form id="submitForm" class="decision-grid">
                 <label>
                   <span>本轮投入 Contribution This Round</span>
@@ -204,24 +202,24 @@
                 </label>
                 <button class="button" type="submit">提交 Submit</button>
               </form>
-            <div class="kpi-grid compact-grid">
-              <div class="kpi-box accent-box">
-                <span class="kpi-label">当前资金 Current Wealth</span>
-                <strong id="studentAvailableWealth">0</strong>
+              <div class="kpi-grid compact-grid">
+                <div class="kpi-box accent-box">
+                  <span class="kpi-label">当前资金 Current Wealth</span>
+                  <strong id="studentAvailableWealth">0</strong>
+                </div>
+                <div class="kpi-box">
+                  <span class="kpi-label">本轮总投入 Total Contribution</span>
+                  <strong id="studentRoundTotal">--</strong>
+                </div>
+                <div class="kpi-box">
+                  <span class="kpi-label">每人公共回报 Public Return</span>
+                  <strong id="studentRoundShare">--</strong>
+                </div>
+                <div class="kpi-box">
+                  <span class="kpi-label">累计资金 My Wealth</span>
+                  <strong id="studentCumulative">0</strong>
+                </div>
               </div>
-              <div class="kpi-box">
-                <span class="kpi-label">本轮总投入 Total Contribution</span>
-                <strong id="studentRoundTotal">--</strong>
-              </div>
-              <div class="kpi-box">
-                <span class="kpi-label">每人公共回报 Public Return</span>
-                <strong id="studentRoundShare">--</strong>
-              </div>
-              <div class="kpi-box">
-                <span class="kpi-label">累计资金 My Wealth</span>
-                <strong id="studentCumulative">0</strong>
-              </div>
-            </div>
             </article>
 
             <article class="card">
@@ -229,13 +227,13 @@
               <table>
                 <thead>
                   <tr>
-                    <th>轮次</th>
-                    <th>本轮可用资金</th>
-                    <th>我投了</th>
-                    <th>我保留</th>
-                    <th>全班总投入</th>
-                    <th>我本轮资金</th>
-                    <th>累计资金</th>
+                    <th>轮次 Round</th>
+                    <th>本轮起始资金 Start Wealth</th>
+                    <th>我的投入 Contribution</th>
+                    <th>我保留的资金 Keep</th>
+                    <th>全班总投入 Total</th>
+                    <th>本轮结束资金 End Wealth</th>
+                    <th>累计资金 Cumulative</th>
                   </tr>
                 </thead>
                 <tbody id="studentHistory"></tbody>

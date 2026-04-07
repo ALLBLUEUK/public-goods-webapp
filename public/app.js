@@ -17,7 +17,7 @@ function formatNumber(value) {
   if (value == null) {
     return "--";
   }
-  return Number.isInteger(value) ? `${value}` : `${Number(value).toFixed(1)}`;
+  return Number.isInteger(value) ? `${value}` : Number(value).toFixed(1);
 }
 
 function escapeHtml(value) {
@@ -49,40 +49,15 @@ async function request(url, options = {}) {
 function buildRules(settings) {
   return `
     <p><strong>中文</strong></p>
-    <p>
-      第 1 轮开始前，每位同学有 <strong>${formatNumber(settings.endowment)}</strong> 点初始资金。
-      从第 2 轮开始，不再额外发放资金。你的当前资金只来自
-      <strong>上一轮结束后剩下的资金 + 每轮公共品回报</strong>。
-      你每轮的投入必须是 <strong>0 到你当前资金</strong> 的整数。
-    </p>
-    <p>
-      你本轮资金 = <strong>自己保留的资金</strong> + <strong>公共账户给每个人分到的回报</strong>。
-      如果本轮全班总投入是 <strong>G</strong>，那么每位同学从公共账户得到
-      <strong>${formatNumber(settings.multiplier)} × G</strong>。
-    </p>
-    <p>
-      所以，你本轮结束后的资金 = <strong>当前资金 - 你的投入 + ${formatNumber(settings.multiplier)} × 全班总投入</strong>。
-      最终资金越高越好。
-    </p>
+    <p>第 1 轮开始前，每位同学先有 <strong>${formatNumber(settings.endowment)}</strong> 点初始资金。之后不会每轮再自动加钱。</p>
+    <p>你每轮可以把 <strong>0 到当前资金</strong> 的整数投入公共账户，其余部分自己保留。</p>
+    <p>如果本轮全班总投入是 <strong>G</strong>，那么每个人从公共账户得到 <strong>${formatNumber(settings.multiplier)} × G</strong>。</p>
+    <p>所以，本轮结束后的资金 = <strong>当前资金 - 你的投入 + ${formatNumber(settings.multiplier)} × 全班总投入</strong>。</p>
     <p><strong>English</strong></p>
-    <p>
-      Before Round 1, each student receives an initial wealth of
-      <strong>${formatNumber(settings.endowment)}</strong>.
-      From Round 2 onward, no new wealth is added automatically.
-      Your current wealth comes only from
-      <strong>what you kept previously + the public return from earlier rounds</strong>.
-      Your contribution each round must be an integer between <strong>0</strong> and <strong>your current wealth</strong>.
-    </p>
-    <p>
-      Your wealth this round = <strong>the amount you keep</strong> +
-      <strong>the public return shared with each person</strong>.
-      If the class total contribution is <strong>G</strong>, each student receives
-      <strong>${formatNumber(settings.multiplier)} × G</strong> from the public account.
-    </p>
-    <p>
-      So, your end-of-round wealth = <strong>current wealth - your contribution + ${formatNumber(settings.multiplier)} × total class contribution</strong>.
-      Higher final wealth is better.
-    </p>
+    <p>Before Round 1, each student starts with <strong>${formatNumber(settings.endowment)}</strong> as initial wealth. No new money is added automatically in later rounds.</p>
+    <p>Each round, you may contribute any integer from <strong>0 to your current wealth</strong> to the public account and keep the rest.</p>
+    <p>If the total class contribution is <strong>G</strong>, each student receives <strong>${formatNumber(settings.multiplier)} × G</strong> from the public account.</p>
+    <p>So your end-of-round wealth is <strong>current wealth - your contribution + ${formatNumber(settings.multiplier)} × total class contribution</strong>.</p>
   `;
 }
 
@@ -94,7 +69,6 @@ function initTeacher() {
   const seatBoard = document.getElementById("seatBoard");
   const teacherRules = document.getElementById("teacherRules");
   const roundResultText = document.getElementById("roundResultText");
-  const rankingIdHeader = document.getElementById("rankingIdHeader");
   const rankingNameHeader = document.getElementById("rankingNameHeader");
   const configForm = document.getElementById("configForm");
   const seatCountInput = document.getElementById("seatCountInput");
@@ -105,48 +79,54 @@ function initTeacher() {
   const closeRoundButton = document.getElementById("closeRoundButton");
   const resetButton = document.getElementById("resetButton");
 
+  let configSynced = false;
+
+  function syncConfigInputs(settings, force = false) {
+    if (!force && configSynced) {
+      return;
+    }
+    seatCountInput.value = settings.seatCount;
+    maxRoundsInput.value = settings.maxRounds;
+    endowmentInput.value = settings.endowment;
+    multiplierInput.value = settings.multiplier;
+    configSynced = true;
+  }
+
   async function refreshTeacher() {
     try {
       const data = await request("/api/teacher/state");
       const { settings } = data;
 
-      seatCountInput.value = settings.seatCount;
-      maxRoundsInput.value = settings.maxRounds;
-      endowmentInput.value = settings.endowment;
-      multiplierInput.value = settings.multiplier;
-
+      syncConfigInputs(settings);
       teacherRules.innerHTML = buildRules(settings);
+
       setText("teacherStatus", {
         setup: "待设置 Setup",
         lobby: "等待开始 Lobby",
         collecting: "本轮进行中 Round Open",
-        results: "本轮已结束 Round Closed",
+        results: "本轮已结算 Round Closed",
         finished: "全部结束 Finished",
       }[data.status] || data.status);
       setText("teacherSessionCode", `Session ${data.sessionCode}`);
-      setText("currentRoundValue", `${data.currentRound}`);
-      setText("plannedRoundsValue", `${data.settings.maxRounds}`);
-      setText("joinedCountValue", `${data.joinedCount}`);
-      setText("submittedCountValue", `${data.currentRoundSummary?.submittedCount || 0}`);
+      setText("currentRoundValue", data.currentRound);
+      setText("plannedRoundsValue", data.settings.maxRounds);
+      setText("joinedCountValue", data.joinedCount);
+      setText("submittedCountValue", data.currentRoundSummary?.submittedCount || 0);
       setText("roundTotalValue", formatNumber(data.currentRoundSummary?.totalContribution));
       setText("roundShareValue", formatNumber(data.currentRoundSummary?.publicShare));
 
       if (data.currentRoundSummary?.status === "closed") {
         roundResultText.innerHTML = `
-          第 ${data.currentRoundSummary.number} 轮已结束。<br />
-          Round ${data.currentRoundSummary.number} is closed.<br /><br />
-          全班总投入 Total Contribution:
-          <strong>${formatNumber(data.currentRoundSummary.totalContribution)}</strong><br />
-          每人公共回报 Public Return per Person:
-          <strong>${formatNumber(data.currentRoundSummary.publicShare)}</strong><br />
+          <strong>第 ${data.currentRoundSummary.number} 轮已结束 / Round ${data.currentRoundSummary.number} closed</strong><br />
+          全班总投入 Total Contribution: <strong>${formatNumber(data.currentRoundSummary.totalContribution)}</strong><br />
+          每人公共回报 Public Return per Person: <strong>${formatNumber(data.currentRoundSummary.publicShare)}</strong><br />
           当前累计资金排名已更新。<br />
-          The wealth ranking has been updated.
+          The cumulative wealth ranking has been updated.
         `;
       } else if (data.status === "collecting") {
         roundResultText.innerHTML = `
-          第 ${data.currentRound} 轮进行中。<br />
-          Round ${data.currentRound} is open.<br /><br />
-          你可以随时点击“结束本轮”。<br />
+          <strong>第 ${data.currentRound} 轮正在进行 / Round ${data.currentRound} is open</strong><br />
+          你可以随时结束本轮。<br />
           You may end the round at any time.
         `;
       } else {
@@ -162,53 +142,40 @@ function initTeacher() {
         encodeURIComponent(data.joinUrl);
 
       seatBoard.innerHTML = data.players
-        .map((player) => {
-          const active = data.currentRoundSummary?.submissions?.find((item) => item.seat === player.seat);
-          return `
+        .map(
+          (player) => `
             <div class="seat-tile">
-              <div class="kpi-label">ID ${player.seat}</div>
+              <div class="kpi-label">Participant ${player.seat}</div>
               <strong>${player.joined ? "Joined" : "Open"}</strong>
               <div class="tiny">${
                 data.status === "finished" && player.joined
                   ? `Name: ${escapeHtml(player.name || "-")}`
                   : player.joined
-                    ? "姓名将在全部轮次结束后显示 / Name hidden until final reveal"
+                    ? "姓名仅在最后揭晓 / Name hidden until the end"
                     : "-"
               }</div>
-              <div class="tiny">${
-                active ? "已提交 / Submitted" : "未提交 / Not submitted"
-              }</div>
+              <div class="tiny">Wealth: ${formatNumber(player.cumulative)}</div>
             </div>
-          `;
-        })
+          `
+        )
         .join("");
 
+      const revealNames = data.status === "finished";
+      rankingNameHeader.classList.toggle("hidden", !revealNames);
       rankingTable.innerHTML = data.ranking.length
-        ? (() => {
-            const revealNames = data.status === "finished";
-            rankingIdHeader.classList.add("hidden");
-            rankingNameHeader.classList.toggle("hidden", !revealNames);
-            return data.ranking
-              .map(
-                (item, index) => `
-                  <tr>
-                    <td>${index + 1}</td>
-                    ${
-                      revealNames
-                        ? `<td>${escapeHtml((data.players.find((p) => p.seat === item.seat) || {}).name || "-")}</td>`
-                        : ""
-                    }
-                    <td>${formatNumber(item.cumulative)}</td>
-                  </tr>
-                `
-              )
-              .join("");
-          })()
-        : (() => {
-            rankingIdHeader.classList.add("hidden");
-            rankingNameHeader.classList.add("hidden");
-            return `<tr><td colspan="${data.status === "finished" ? 3 : 2}">暂无参与者 / No players yet.</td></tr>`;
-          })();
+        ? data.ranking
+            .map((item, index) => {
+              const player = data.players.find((p) => p.seat === item.seat);
+              return `
+                <tr>
+                  <td>${index + 1}</td>
+                  ${revealNames ? `<td>${escapeHtml(player?.name || "-")}</td>` : ""}
+                  <td>${formatNumber(item.cumulative)}</td>
+                </tr>
+              `;
+            })
+            .join("")
+        : `<tr><td colspan="${revealNames ? 3 : 2}">暂无参与者 / No players yet.</td></tr>`;
 
       historyTable.innerHTML = data.roundHistory.length
         ? data.roundHistory
@@ -223,7 +190,7 @@ function initTeacher() {
               `
             )
             .join("")
-        : `<tr><td colspan="4">No closed rounds yet.</td></tr>`;
+        : `<tr><td colspan="4">暂无已结算轮次 / No closed rounds yet.</td></tr>`;
 
       const locked = data.currentRound > 0 || data.joinedCount > 0;
       seatCountInput.disabled = locked;
@@ -243,7 +210,7 @@ function initTeacher() {
   configForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     try {
-      await request("/api/teacher/configure", {
+      const response = await request("/api/teacher/configure", {
         method: "POST",
         body: {
           seatCount: Number(seatCountInput.value),
@@ -252,6 +219,7 @@ function initTeacher() {
           multiplier: Number(multiplierInput.value),
         },
       });
+      syncConfigInputs(response.settings, true);
       await refreshTeacher();
     } catch (error) {
       alert(error.message);
@@ -277,11 +245,12 @@ function initTeacher() {
   });
 
   resetButton.addEventListener("click", async () => {
-    if (!window.confirm("确定要重置整场实验吗？ Are you sure to reset the whole session?")) {
+    if (!window.confirm("确定要重置整场实验吗？\nReset the whole session?")) {
       return;
     }
     try {
       await request("/api/teacher/reset", { method: "POST" });
+      configSynced = false;
       await refreshTeacher();
     } catch (error) {
       alert(error.message);
@@ -308,12 +277,11 @@ function initStudent() {
   async function refreshStudent() {
     try {
       const meta = await request("/api/meta");
-      const { settings } = meta;
-      studentRules.innerHTML = buildRules(settings);
+      studentRules.innerHTML = buildRules(meta.settings);
 
       if (!token) {
         setText("studentStatus", "等待进入 Waiting");
-        setText("studentSeatBadge", `ID --`);
+        setText("studentSeatBadge", "Participant --");
         setText("studentAvailableWealth", "0");
         return;
       }
@@ -332,23 +300,22 @@ function initStudent() {
           finished: "实验已结束 Finished",
         }[data.status] || data.status
       );
-      setText("studentSeatBadge", `ID ${data.player.seat}`);
+      setText("studentSeatBadge", `Participant ${data.player.seat}`);
       setText("studentAvailableWealth", formatNumber(data.player.availableWealth));
       setText("studentCumulative", formatNumber(data.player.cumulative));
       setText("studentRoundTotal", formatNumber(data.currentRoundSummary?.totalContribution));
       setText("studentRoundShare", formatNumber(data.currentRoundSummary?.publicShare));
-      contributionInput.max = data.player.availableWealth;
+      contributionInput.max = String(data.player.availableWealth);
 
       const instruction = document.getElementById("studentInstruction");
       if (data.status === "setup" || data.status === "lobby") {
         instruction.textContent = "教师还没有开始本轮。The teacher has not started the round yet.";
       } else if (data.status === "collecting") {
         instruction.textContent = data.currentRoundSummary?.submitted
-          ? `第 ${data.currentRound} 轮已提交：你投了 ${data.currentRoundSummary.ownContribution}。 Round ${data.currentRound} submitted.`
-          : `第 ${data.currentRound} 轮进行中。你当前资金为 ${formatNumber(data.player.availableWealth)}。请输入 0 到 ${formatNumber(data.player.availableWealth)} 的整数。 Round ${data.currentRound} is open.`;
+          ? `第 ${data.currentRound} 轮已提交：你投了 ${data.currentRoundSummary.ownContribution}。Round ${data.currentRound} submitted.`
+          : `第 ${data.currentRound} 轮进行中。你当前资金是 ${formatNumber(data.player.availableWealth)}。请输入 0 到 ${formatNumber(data.player.availableWealth)} 的整数。`;
       } else if (data.status === "results") {
-        instruction.textContent =
-          "教师已结束本轮，请查看你的当前资金与公共回报。Round closed. Check your wealth and the public return.";
+        instruction.textContent = "本轮已结束，请查看你的当前资金和公共回报。Round closed. Check your current wealth and the public return.";
       } else if (data.status === "finished") {
         instruction.textContent = "全部轮次结束。All rounds are finished.";
       }
@@ -373,7 +340,7 @@ function initStudent() {
               `
             )
             .join("")
-        : `<tr><td colspan="7">No settled rounds yet.</td></tr>`;
+        : `<tr><td colspan="7">暂无已结算轮次 / No settled rounds yet.</td></tr>`;
     } catch (error) {
       if (token) {
         window.localStorage.removeItem(studentTokenKey);
@@ -425,13 +392,13 @@ function initStudent() {
 }
 
 if (role === "teacher") {
-  homeHero.classList.add("hidden");
-  teacherPanel.classList.remove("hidden");
+  homeHero?.classList.add("hidden");
+  teacherPanel?.classList.remove("hidden");
   homeActions?.classList.add("hidden");
   initTeacher();
 } else if (role === "student") {
-  homeHero.classList.add("hidden");
-  studentPanel.classList.remove("hidden");
+  homeHero?.classList.add("hidden");
+  studentPanel?.classList.remove("hidden");
   homeActions?.classList.add("hidden");
   initStudent();
 }

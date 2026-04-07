@@ -8,28 +8,243 @@
   </head>
   <body>
     <main class="app-shell">
-      <section class="hero">
+      <section class="hero" id="hero">
         <div class="hero-copy">
           <p class="eyebrow">Ultimatum Game</p>
           <h1>最后通牒博弈 Ultimatum Game</h1>
           <p class="lead">
-            这个页面将承载 Ultimatum Game 的教师端与学生端。
+            前半阶段角色固定，后半阶段整体交换。提出者先报价，回应者再决定接受或拒绝。页面会自动生成课堂分析。
             <br />
-            This page will host the teacher and student views for the Ultimatum Game.
+            Roles stay fixed in the first half and switch in the second half. Proposers submit offers first, then responders accept or reject. The site also generates teaching-ready analysis.
           </p>
         </div>
-        <div class="hero-actions">
-          <a class="button" href="/">返回主页 Home</a>
+        <div class="hero-actions" id="heroActions">
+          <a class="button" href="/ultimatum.html?role=teacher">教师端 Teacher</a>
+          <a class="button button-secondary" href="/ultimatum.html?role=student">学生端 Student</a>
+          <a class="button button-secondary" href="/">返回主页 Home</a>
         </div>
       </section>
 
-      <section class="card" style="margin-top:16px;">
-        <h2>开发中 In Progress</h2>
-        <p class="muted">
-          我已经把站点结构改成“主页选游戏”的模式，当前不会再覆盖原来的公共品博弈页面。
-          下一步会把 Ultimatum Game 的教师端、学生端、双语规则和结果分析接到这个页面。
-        </p>
+      <section id="teacherPanel" class="hidden">
+        <header class="page-head">
+          <div>
+            <p class="eyebrow">Teacher Console</p>
+            <h2>教师端 Teacher</h2>
+          </div>
+          <div class="status-row">
+            <span class="pill" id="teacherStatus">Loading</span>
+            <span class="pill" id="teacherSessionCode">Session --</span>
+          </div>
+        </header>
+
+        <article class="card teacher-setup-bar">
+          <div class="split-head">
+            <div>
+              <h3>课堂设置 Classroom Setup</h3>
+              <p class="muted">先设置人数和阶段轮数，再让学生按编号进入。若学生人数为奇数，可勾选“教师补位”。</p>
+            </div>
+          </div>
+          <form id="ultimatumConfigForm" class="config-grid">
+            <label>
+              <span>学生人数 Student Count</span>
+              <input id="studentCountInput" type="number" min="6" max="8" value="6" />
+            </label>
+            <label>
+              <span>每阶段轮数 Rounds per Stage</span>
+              <input id="phaseRoundsInput" type="number" min="2" max="4" value="3" />
+            </label>
+            <label>
+              <span>总额 Pie Size</span>
+              <input id="pieSizeInput" type="number" min="1" max="100" value="10" />
+            </label>
+            <label>
+              <span>奇数时教师补位 Teacher joins if odd</span>
+              <select id="teacherJoinInput">
+                <option value="true">是 Yes</option>
+                <option value="false">否 No</option>
+              </select>
+            </label>
+            <button class="button" type="submit">保存设置 Save Settings</button>
+          </form>
+        </article>
+
+        <section class="teacher-layout">
+          <article class="card">
+            <h3>规则 Rules</h3>
+            <div class="rules-text">
+              <p><strong>中文</strong></p>
+              <p>每轮总额是 10。提出者先决定给对方多少；回应者看到报价后，只能选择接受或拒绝。</p>
+              <p>接受：提出者得 10 - 报价，回应者得报价。拒绝：双方都得 0。</p>
+              <p>前半阶段角色固定，后半阶段整体交换。每轮重新随机匹配，但保持匿名。</p>
+              <p><strong>English</strong></p>
+              <p>Each round uses a pie of 10. Proposers decide an offer first; responders then accept or reject after seeing the offer.</p>
+              <p>If accepted, proposer payoff = 10 - offer and responder payoff = offer. If rejected, both get 0.</p>
+              <p>Roles stay fixed in Stage 1 and switch in Stage 2. Matching is random and anonymous every round.</p>
+            </div>
+          </article>
+
+          <article class="card">
+            <h3>课堂控制 Live Control</h3>
+            <div class="button-stack">
+              <button class="button" id="startUltimatumRoundButton">开始本轮 Start Round</button>
+              <button class="button button-secondary" id="closeProposersButton">结束报价阶段 Close Proposer Stage</button>
+              <button class="button button-secondary" id="closeRespondersButton">结束回应阶段并结算 Close Responder Stage</button>
+              <button class="button button-danger" id="resetUltimatumButton">重置全部 Reset</button>
+            </div>
+            <div class="kpi-grid">
+              <div class="kpi-box">
+                <span class="kpi-label">当前轮次 Current Round</span>
+                <strong id="roundValue">0</strong>
+              </div>
+              <div class="kpi-box">
+                <span class="kpi-label">当前阶段 Current Stage</span>
+                <strong id="stageValue">1</strong>
+              </div>
+              <div class="kpi-box">
+                <span class="kpi-label">总轮次 Total Rounds</span>
+                <strong id="totalRoundsValue">0</strong>
+              </div>
+              <div class="kpi-box">
+                <span class="kpi-label">已加入 Joined Students</span>
+                <strong id="joinedStudentsValue">0</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="card result-card">
+            <h3>阶段角色 Stage Roles</h3>
+            <div class="rules-text">
+              <p id="stageRolesText">Waiting</p>
+            </div>
+          </article>
+
+          <article class="card join-card">
+            <h3>学生入口 Student Entry</h3>
+            <div class="link-box" id="joinUrl">Loading</div>
+            <img class="qr" id="ultimatumQr" alt="Join QR code" />
+            <p class="tiny muted">学生只输入编号，不输入姓名。Students join with ID numbers only.</p>
+          </article>
+
+          <article class="card">
+            <h3>当前结果 Current Results</h3>
+            <div id="roundResults" class="rules-text">No settled round yet.</div>
+          </article>
+
+          <article class="card">
+            <h3>教师补位 Teacher Self-Action</h3>
+            <div id="teacherSelfAction" class="rules-text">Teacher is not participating.</div>
+          </article>
+
+          <article class="card card-span">
+            <h3>分析 Analysis</h3>
+            <div id="analysisSummary" class="rules-text">No analysis yet.</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>轮次 Round</th>
+                  <th>阶段 Stage</th>
+                  <th>平均报价 Average Offer</th>
+                  <th>接受率 Acceptance Rate</th>
+                  <th>拒绝次数 Rejections</th>
+                </tr>
+              </thead>
+              <tbody id="analysisRounds"></tbody>
+            </table>
+          </article>
+        </section>
+      </section>
+
+      <section id="studentPanel" class="hidden">
+        <header class="page-head">
+          <div>
+            <p class="eyebrow">Student View</p>
+            <h2>学生端 Student</h2>
+          </div>
+          <div class="status-row">
+            <span class="pill" id="studentStatus">Loading</span>
+            <span class="pill" id="studentIdBadge">ID --</span>
+          </div>
+        </header>
+
+        <section class="student-layout">
+          <article class="card" id="joinCard">
+            <h3>进入实验 Join the Session</h3>
+            <p class="muted">请输入你的编号。编号不能重复。Do not use an ID that has already been taken.</p>
+            <form id="joinForm" class="config-grid">
+              <label>
+                <span>编号 ID</span>
+                <input id="playerIdInput" type="number" min="1" max="8" />
+              </label>
+              <button class="button" type="submit">进入 Join</button>
+            </form>
+            <p class="tiny muted" id="joinTip">如果教师设置为奇数补位，最高编号可能由教师占用。The highest ID may be reserved for the teacher when the class size is odd.</p>
+          </article>
+
+          <article class="card">
+            <h3>你的任务 Your Task</h3>
+            <div id="studentInstruction" class="rules-text">Waiting.</div>
+          </article>
+
+          <div id="studentWorkspace" class="hidden student-grid">
+            <article class="card" id="proposerCard">
+              <h3>提出者决策 Proposer Decision</h3>
+              <form id="offerForm" class="decision-grid">
+                <label>
+                  <span>你给对方多少分 Offer</span>
+                  <input id="offerInput" type="number" min="0" max="10" step="1" value="0" />
+                </label>
+                <button class="button" type="submit">提交报价 Submit Offer</button>
+              </form>
+            </article>
+
+            <article class="card" id="responderCard">
+              <h3>回应者决策 Responder Decision</h3>
+              <p class="lead" id="receivedOfferText">--</p>
+              <div class="button-stack">
+                <button class="button" id="acceptButton" type="button">接受 Accept</button>
+                <button class="button button-secondary" id="rejectButton" type="button">拒绝 Reject</button>
+              </div>
+            </article>
+
+            <article class="card">
+              <h3>我的结果 My Record</h3>
+              <div class="kpi-grid compact-grid">
+                <div class="kpi-box">
+                  <span class="kpi-label">累计得分 Cumulative Payoff</span>
+                  <strong id="studentCumulative">0</strong>
+                </div>
+                <div class="kpi-box">
+                  <span class="kpi-label">本轮角色 Role</span>
+                  <strong id="studentRoleValue">--</strong>
+                </div>
+                <div class="kpi-box">
+                  <span class="kpi-label">收到报价 / 已报价 Offer</span>
+                  <strong id="studentOfferValue">--</strong>
+                </div>
+                <div class="kpi-box">
+                  <span class="kpi-label">本轮结果 Round Payoff</span>
+                  <strong id="studentPayoffValue">--</strong>
+                </div>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>轮次 Round</th>
+                    <th>阶段 Stage</th>
+                    <th>角色 Role</th>
+                    <th>报价 Offer</th>
+                    <th>接受? Accepted?</th>
+                    <th>得分 Payoff</th>
+                    <th>累计 Cumulative</th>
+                  </tr>
+                </thead>
+                <tbody id="studentHistory"></tbody>
+              </table>
+            </article>
+          </div>
+        </section>
       </section>
     </main>
+    <script src="/ultimatum.js"></script>
   </body>
 </html>
