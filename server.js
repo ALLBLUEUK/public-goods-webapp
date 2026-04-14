@@ -715,6 +715,897 @@ function closeUltimatumResponders() {
     ultimatumState.currentRound >= totalUltimatumRounds() ? "finished" : "between_rounds";
 }
 
+function createUsedCarParticipants(count, teacherJoinsIfOdd) {
+  const participants = [];
+  for (let id = 1; id <= count; id += 1) {
+    participants.push({
+      id,
+      name: "",
+      token: "",
+      joined: false,
+      isTeacher: false,
+      cumulative: 0,
+      history: [],
+    });
+  }
+
+  if (count % 2 === 1 && teacherJoinsIfOdd) {
+    participants.push({
+      id: count + 1,
+      name: "Teacher",
+      token: "teacher",
+      joined: true,
+      isTeacher: true,
+      cumulative: 0,
+      history: [],
+    });
+  }
+
+  return participants;
+}
+
+function defaultUsedCarGoodCount(studentCount, teacherJoinsIfOdd) {
+  const totalPlayers = studentCount + (studentCount % 2 === 1 && teacherJoinsIfOdd ? 1 : 0);
+  const sellers = totalPlayers / 2;
+  return Math.max(1, Math.floor(sellers / 2));
+}
+
+function freshUsedCarState() {
+  const defaults = {
+    studentCount: 6,
+    phaseRounds: 2,
+    pieSize: 10,
+    teacherJoinsIfOdd: true,
+    goodCarCount: defaultUsedCarGoodCount(6, true),
+    buyerValueGood: 10,
+    buyerValueLemon: 4,
+    sellerKeepGood: 8,
+    sellerKeepLemon: 2,
+  };
+
+  return {
+    sessionId: crypto.randomUUID(),
+    sessionCode: randomCode(),
+    createdAt: new Date().toISOString(),
+    status: "setup",
+    currentRound: 0,
+    currentStage: 1,
+    settings: defaults,
+    participants: createUsedCarParticipants(
+      defaults.studentCount,
+      defaults.teacherJoinsIfOdd
+    ),
+    stageRoles: {
+      1: { buyers: [], sellers: [], qualities: {} },
+      2: { buyers: [], sellers: [], qualities: {} },
+    },
+    rounds: [],
+  };
+}
+
+let usedCarState = freshUsedCarState();
+
+function totalUsedCarRounds() {
+  return usedCarState.settings.phaseRounds * 2;
+}
+
+function usedCarSellerCount(settings = usedCarState.settings) {
+  const totalPlayers =
+    settings.studentCount +
+    (settings.studentCount % 2 === 1 && settings.teacherJoinsIfOdd ? 1 : 0);
+  return totalPlayers / 2;
+}
+
+function validateUsedCarSettings(settings) {
+  const studentCount = Number(settings.studentCount);
+  const phaseRounds = Number(settings.phaseRounds);
+  const pieSize = Number(settings.pieSize);
+  const teacherJoinsIfOdd = Boolean(settings.teacherJoinsIfOdd);
+  const buyerValueGood = Number(settings.buyerValueGood);
+  const buyerValueLemon = Number(settings.buyerValueLemon);
+  const sellerKeepGood = Number(settings.sellerKeepGood);
+  const sellerKeepLemon = Number(settings.sellerKeepLemon);
+
+  if (!Number.isInteger(studentCount) || studentCount < 1 || studentCount > 40) {
+    throw new Error("Student count must be an integer between 1 and 40.");
+  }
+  if (!Number.isInteger(phaseRounds) || phaseRounds < 1 || phaseRounds > 4) {
+    throw new Error("Rounds per phase must be an integer between 1 and 4.");
+  }
+  if (!Number.isInteger(pieSize) || pieSize < 1 || pieSize > 100) {
+    throw new Error("Bid ceiling must be an integer between 1 and 100.");
+  }
+  if (studentCount % 2 === 1 && !teacherJoinsIfOdd) {
+    throw new Error("If student count is odd, enable teacher participation to make the total even.");
+  }
+  for (const [label, value] of [
+    ["Buyer value of a good car", buyerValueGood],
+    ["Buyer value of a lemon", buyerValueLemon],
+    ["Seller keep value of a good car", sellerKeepGood],
+    ["Seller keep value of a lemon", sellerKeepLemon],
+  ]) {
+    if (!Number.isFinite(value) || value < -100 || value > 100) {
+      throw new Error(`${label} must be between -100 and 100.`);
+    }
+  }
+
+  const sellers = usedCarSellerCount({ studentCount, teacherJoinsIfOdd });
+  const rawGoodCarCount =
+    settings.goodCarCount == null || settings.goodCarCount === ""
+      ? defaultUsedCarGoodCount(studentCount, teacherJoinsIfOdd)
+      : Number(settings.goodCarCount);
+  if (!Number.isInteger(rawGoodCarCount) || rawGoodCarCount < 0 || rawGoodCarCount > sellers) {
+    throw new Error(`Good car count must be an integer between 0 and ${sellers}.`);
+  }
+
+  return {
+    studentCount,
+    phaseRounds,
+    pieSize,
+    teacherJoinsIfOdd,
+    goodCarCount: rawGoodCarCount,
+    buyerValueGood,
+    buyerValueLemon,
+    sellerKeepGood,
+    sellerKeepLemon,
+  };
+}
+
+function resetUsedCarSession() {
+  usedCarState = freshUsedCarState();
+}
+
+function getUsedCarParticipantByToken(token) {
+  return usedCarState.participants.find((item) => item.token === token) || null;
+}
+
+function getUsedCarActiveParticipants() {
+  return usedCarState.participants.filter((item) => item.joined);
+}
+
+function getUsedCarOpenIds() {
+  return usedCarState.participants
+    .filter((item) => !item.joined && !item.isTeacher)
+    .map((item) => item.id);
+}
+
+function assignUsedCarQualities(sellerIds) {
+  const qualityPool = [
+    ...Array.from({ length: usedCarState.settings.goodCarCount }, () => "good"),
+    ...Array.from(
+      { length: sellerIds.length - usedCarState.settings.goodCarCount },
+      () => "lemon"
+    ),
+  ];
+  const shuffledQualities = shuffle(qualityPool);
+  const qualities = {};
+  sellerIds.forEach((sellerId, index) => {
+    qualities[sellerId] = shuffledQualities[index];
+  });
+  return qualities;
+}
+
+function assignUsedCarStageRoles() {
+  const ids = getUsedCarActiveParticipants().map((item) => item.id);
+  const shuffled = shuffle(ids);
+  const half = shuffled.length / 2;
+  const buyers = shuffled.slice(0, half).sort((a, b) => a - b);
+  const sellers = shuffled.slice(half).sort((a, b) => a - b);
+  usedCarState.stageRoles[1] = {
+    buyers,
+    sellers,
+    qualities: assignUsedCarQualities(sellers),
+  };
+  usedCarState.stageRoles[2] = {
+    buyers: [...sellers],
+    sellers: [...buyers],
+    qualities: assignUsedCarQualities(buyers),
+  };
+}
+
+function getUsedCarStageForRound(roundNumber) {
+  return roundNumber <= usedCarState.settings.phaseRounds ? 1 : 2;
+}
+
+function getUsedCarRolesForRound(roundNumber) {
+  return usedCarState.stageRoles[getUsedCarStageForRound(roundNumber)];
+}
+
+function getUsedCarRoleForParticipant(participantId, roundNumber) {
+  const roles = getUsedCarRolesForRound(roundNumber);
+  if (roles.buyers.includes(participantId)) {
+    return "buyer";
+  }
+  if (roles.sellers.includes(participantId)) {
+    return "seller";
+  }
+  return null;
+}
+
+function getUsedCarRound() {
+  return usedCarState.rounds[usedCarState.currentRound - 1] || null;
+}
+
+function computeUsedCarAnalysis() {
+  const closedRounds = usedCarState.rounds.filter((round) => round.status === "closed");
+  const allPairs = closedRounds.flatMap((round) => round.pairs);
+  const bids = allPairs.map((pair) => pair.bid);
+  const soldPairs = allPairs.filter((pair) => pair.sold);
+  const soldGood = soldPairs.filter((pair) => pair.quality === "good");
+  const soldLemon = soldPairs.filter((pair) => pair.quality === "lemon");
+  const stage1Pairs = allPairs.filter((pair) => pair.stage === 1);
+  const stage2Pairs = allPairs.filter((pair) => pair.stage === 2);
+  const distribution = Array.from(
+    { length: usedCarState.settings.pieSize + 1 },
+    (_, bid) => ({
+      bid,
+      count: bids.filter((value) => value === bid).length,
+    })
+  );
+
+  return {
+    overall: {
+      pairCount: allPairs.length,
+      averageBid: average(bids),
+      medianBid: median(bids),
+      tradeRate: allPairs.length ? soldPairs.length / allPairs.length : null,
+      soldGoodCount: soldGood.length,
+      soldLemonCount: soldLemon.length,
+      averageBuyerPayoff: average(allPairs.map((pair) => pair.buyerPayoff)),
+    },
+    stages: {
+      1: {
+        averageBid: average(stage1Pairs.map((pair) => pair.bid)),
+        tradeRate: stage1Pairs.length
+          ? stage1Pairs.filter((pair) => pair.sold).length / stage1Pairs.length
+          : null,
+      },
+      2: {
+        averageBid: average(stage2Pairs.map((pair) => pair.bid)),
+        tradeRate: stage2Pairs.length
+          ? stage2Pairs.filter((pair) => pair.sold).length / stage2Pairs.length
+          : null,
+      },
+    },
+    distribution,
+    rounds: closedRounds.map((round) => ({
+      round: round.number,
+      stage: round.stage,
+      averageBid: average(round.pairs.map((pair) => pair.bid)),
+      saleCount: round.pairs.filter((pair) => pair.sold).length,
+      unsoldCount: round.pairs.filter((pair) => !pair.sold).length,
+      soldGoodCount: round.pairs.filter(
+        (pair) => pair.sold && pair.quality === "good"
+      ).length,
+      soldLemonCount: round.pairs.filter(
+        (pair) => pair.sold && pair.quality === "lemon"
+      ).length,
+      distribution: Array.from(
+        { length: usedCarState.settings.pieSize + 1 },
+        (_, bid) => ({
+          bid,
+          count: round.pairs.filter((pair) => pair.bid === bid).length,
+        })
+      ),
+    })),
+  };
+}
+
+function usedCarRanking() {
+  return usedCarState.participants
+    .filter((item) => item.joined && !item.isTeacher)
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      cumulative: item.cumulative,
+    }))
+    .sort((a, b) => b.cumulative - a.cumulative || a.id - b.id);
+}
+
+function usedCarBaseState(origin) {
+  const totalPlayers = usedCarState.participants.filter((item) => item.joined).length;
+  const sellerCount = usedCarSellerCount();
+  return {
+    sessionId: usedCarState.sessionId,
+    sessionCode: usedCarState.sessionCode,
+    status: usedCarState.status,
+    currentRound: usedCarState.currentRound,
+    currentStage: usedCarState.currentStage,
+    totalRounds: totalUsedCarRounds(),
+    settings: {
+      ...usedCarState.settings,
+      lemonCount: sellerCount - usedCarState.settings.goodCarCount,
+    },
+    joinedStudentCount: usedCarState.participants.filter(
+      (item) => item.joined && !item.isTeacher
+    ).length,
+    totalActivePlayers: totalPlayers,
+    joinOpen: usedCarState.status === "lobby" && usedCarState.currentRound === 0,
+    openIds: getUsedCarOpenIds(),
+    teacherUrl: `${origin}/used-car.html?role=teacher`,
+    joinUrl: `${origin}/used-car.html?role=student`,
+    stageRoles: {
+      1: {
+        buyerCount: usedCarState.stageRoles[1].buyers.length,
+        sellerCount: usedCarState.stageRoles[1].sellers.length,
+      },
+      2: {
+        buyerCount: usedCarState.stageRoles[2].buyers.length,
+        sellerCount: usedCarState.stageRoles[2].sellers.length,
+      },
+    },
+    analysis: computeUsedCarAnalysis(),
+    ranking: usedCarRanking(),
+  };
+}
+
+function usedCarTeacherState(origin) {
+  const round = getUsedCarRound();
+  const teacherParticipant = usedCarState.participants.find((item) => item.isTeacher) || null;
+  const teacherRole =
+    teacherParticipant && usedCarState.currentRound > 0
+      ? getUsedCarRoleForParticipant(teacherParticipant.id, usedCarState.currentRound)
+      : null;
+
+  return {
+    ...usedCarBaseState(origin),
+    participants: usedCarState.participants.map((item) => ({
+      id: item.id,
+      name: item.name,
+      joined: item.joined,
+      isTeacher: item.isTeacher,
+      cumulative: item.cumulative,
+      history: item.history,
+    })),
+    currentRoundDetail: round
+      ? {
+          number: round.number,
+          stage: round.stage,
+          status: round.status,
+          buyerIds: round.buyerIds,
+          sellerIds: round.sellerIds,
+          marketComposition: {
+            goodCars: Object.values(round.sellerQualities).filter((value) => value === "good").length,
+            lemons: Object.values(round.sellerQualities).filter((value) => value === "lemon").length,
+          },
+          submittedBids: Object.keys(round.bids).map(Number),
+          submittedDecisions: Object.keys(round.sellerDecisions).map(Number),
+          pendingBids: round.buyerIds.filter((id) => round.bids[id] == null),
+          pendingDecisions: round.sellerIds.filter((id) => !round.sellerDecisions[id]),
+          revealedPairs:
+            round.status === "closed"
+              ? round.pairs.map((pair, index) => ({
+                  pairNumber: index + 1,
+                  bid: pair.bid,
+                  sold: pair.sold,
+                  quality: pair.sold ? pair.quality : null,
+                  buyerPayoff: pair.buyerPayoff,
+                  sellerPayoff: pair.sellerPayoff,
+                }))
+              : [],
+        }
+      : null,
+    teacherAction:
+      teacherParticipant && teacherParticipant.joined
+        ? {
+            participantId: teacherParticipant.id,
+            role: teacherRole,
+            roundStatus: round?.status || null,
+            ownQuality:
+              teacherRole === "seller"
+                ? round?.sellerQualities?.[teacherParticipant.id] ??
+                  usedCarState.stageRoles[usedCarState.currentStage]?.qualities?.[
+                    teacherParticipant.id
+                  ] ??
+                  null
+                : null,
+            receivedBid:
+              teacherRole === "seller"
+                ? round?.pendingSellerBids?.[teacherParticipant.id] ?? null
+                : null,
+            hasSubmitted:
+              teacherRole === "buyer"
+                ? Boolean(round && round.bids[teacherParticipant.id] != null)
+                : teacherRole === "seller"
+                  ? Boolean(round && round.sellerDecisions[teacherParticipant.id])
+                  : false,
+          }
+        : null,
+  };
+}
+
+function startUsedCarRound() {
+  if (!usedCarState.stageRoles[1].buyers.length) {
+    assignUsedCarStageRoles();
+  }
+
+  const nextRound = usedCarState.currentRound + 1;
+  const stage = getUsedCarStageForRound(nextRound);
+  const roles = getUsedCarRolesForRound(nextRound);
+
+  usedCarState.currentRound = nextRound;
+  usedCarState.currentStage = stage;
+  usedCarState.status = "buyer_collecting";
+  usedCarState.rounds.push({
+    number: nextRound,
+    stage,
+    status: "buyer_collecting",
+    buyerIds: [...roles.buyers],
+    sellerIds: [...roles.sellers],
+    sellerQualities: { ...roles.qualities },
+    bids: {},
+    sellerDecisions: {},
+    pendingSellerBids: {},
+    pairs: [],
+    openedAt: new Date().toISOString(),
+    buyerClosedAt: null,
+    closedAt: null,
+  });
+}
+
+function closeUsedCarBuyers() {
+  const round = getUsedCarRound();
+  const bidsPool = shuffle(
+    round.buyerIds.map((buyerId) => ({
+      buyerId,
+      bid: round.bids[buyerId],
+    }))
+  );
+  const sellers = shuffle(round.sellerIds);
+
+  round.pairs = sellers.map((sellerId, index) => ({
+    round: round.number,
+    stage: round.stage,
+    buyerId: bidsPool[index].buyerId,
+    sellerId,
+    bid: bidsPool[index].bid,
+    quality: round.sellerQualities[sellerId],
+    sold: null,
+    buyerPayoff: 0,
+    sellerPayoff: 0,
+  }));
+
+  round.pendingSellerBids = {};
+  for (const pair of round.pairs) {
+    round.pendingSellerBids[pair.sellerId] = pair.bid;
+  }
+
+  round.status = "seller_collecting";
+  round.buyerClosedAt = new Date().toISOString();
+  usedCarState.status = "seller_collecting";
+}
+
+function closeUsedCarSellers() {
+  const round = getUsedCarRound();
+  const {
+    buyerValueGood,
+    buyerValueLemon,
+    sellerKeepGood,
+    sellerKeepLemon,
+  } = usedCarState.settings;
+
+  for (const pair of round.pairs) {
+    const sold = round.sellerDecisions[pair.sellerId] === "sell";
+    pair.sold = sold;
+    if (sold) {
+      pair.buyerPayoff =
+        (pair.quality === "good" ? buyerValueGood : buyerValueLemon) - pair.bid;
+      pair.sellerPayoff = pair.bid;
+    } else {
+      pair.buyerPayoff = 0;
+      pair.sellerPayoff = pair.quality === "good" ? sellerKeepGood : sellerKeepLemon;
+    }
+
+    const buyer = usedCarState.participants.find((item) => item.id === pair.buyerId);
+    const seller = usedCarState.participants.find((item) => item.id === pair.sellerId);
+
+    buyer.cumulative += pair.buyerPayoff;
+    seller.cumulative += pair.sellerPayoff;
+
+    buyer.history.push({
+      round: round.number,
+      stage: round.stage,
+      role: "buyer",
+      bid: pair.bid,
+      outcome: sold ? "bought" : "no_trade",
+      quality: sold ? pair.quality : null,
+      payoff: pair.buyerPayoff,
+      cumulative: buyer.cumulative,
+    });
+    seller.history.push({
+      round: round.number,
+      stage: round.stage,
+      role: "seller",
+      bid: pair.bid,
+      quality: pair.quality,
+      decision: sold ? "sell" : "keep",
+      payoff: pair.sellerPayoff,
+      cumulative: seller.cumulative,
+    });
+  }
+
+  round.status = "closed";
+  round.closedAt = new Date().toISOString();
+  usedCarState.status =
+    usedCarState.currentRound >= totalUsedCarRounds() ? "finished" : "between_rounds";
+}
+
+async function handleUsedCarApi(req, res, url) {
+  const origin = getOrigin(req);
+
+  if (req.method === "GET" && url.pathname === "/api/used-car/meta") {
+    sendJson(res, 200, usedCarBaseState(origin));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/used-car/teacher/state") {
+    sendJson(res, 200, usedCarTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/used-car/teacher/reset") {
+    resetUsedCarSession();
+    sendJson(res, 200, usedCarTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/used-car/teacher/configure") {
+    const body = await getRequestBody(req);
+    if (usedCarState.currentRound > 0 || usedCarState.status !== "setup") {
+      sendJson(res, 409, {
+        error: "Reset first before changing settings after the session starts.",
+      });
+      return;
+    }
+    try {
+      const settings = validateUsedCarSettings(body);
+      usedCarState.settings = settings;
+      usedCarState.participants = createUsedCarParticipants(
+        settings.studentCount,
+        settings.teacherJoinsIfOdd
+      );
+      usedCarState.status = "lobby";
+      sendJson(res, 200, usedCarTeacherState(origin));
+    } catch (error) {
+      sendJson(res, 400, { error: error.message });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/used-car/teacher/start-round") {
+    const joinedStudents = usedCarState.participants.filter(
+      (item) => item.joined && !item.isTeacher
+    ).length;
+    if (joinedStudents !== usedCarState.settings.studentCount) {
+      sendJson(res, 409, {
+        error: "Wait until all students have joined before starting.",
+      });
+      return;
+    }
+    if (usedCarState.status === "buyer_collecting") {
+      sendJson(res, 409, { error: "Buyer bidding is already open." });
+      return;
+    }
+    if (usedCarState.status === "seller_collecting") {
+      sendJson(res, 409, { error: "Close seller decisions first." });
+      return;
+    }
+    if (usedCarState.currentRound >= totalUsedCarRounds()) {
+      sendJson(res, 409, { error: "All used-car rounds are already finished." });
+      return;
+    }
+
+    startUsedCarRound();
+    sendJson(res, 200, usedCarTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/used-car/teacher/close-buyers") {
+    const round = getUsedCarRound();
+    if (!round || round.status !== "buyer_collecting") {
+      sendJson(res, 409, { error: "There is no buyer bidding stage to close." });
+      return;
+    }
+    const missing = round.buyerIds.filter((id) => round.bids[id] == null);
+    if (missing.length) {
+      sendJson(res, 409, {
+        error: `These buyer IDs have not bid yet: ${missing.join(", ")}.`,
+      });
+      return;
+    }
+
+    closeUsedCarBuyers();
+    sendJson(res, 200, usedCarTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/used-car/teacher/close-sellers") {
+    const round = getUsedCarRound();
+    if (!round || round.status !== "seller_collecting") {
+      sendJson(res, 409, { error: "There is no seller decision stage to close." });
+      return;
+    }
+    const missing = round.sellerIds.filter((id) => !round.sellerDecisions[id]);
+    if (missing.length) {
+      sendJson(res, 409, {
+        error: `These seller IDs have not decided yet: ${missing.join(", ")}.`,
+      });
+      return;
+    }
+
+    closeUsedCarSellers();
+    sendJson(res, 200, usedCarTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/used-car/teacher/submit-self") {
+    const body = await getRequestBody(req);
+    const round = getUsedCarRound();
+    const teacher = usedCarState.participants.find((item) => item.isTeacher);
+    if (!teacher || !teacher.joined) {
+      sendJson(res, 409, { error: "Teacher is not participating in this session." });
+      return;
+    }
+    if (!round) {
+      sendJson(res, 409, { error: "There is no active round." });
+      return;
+    }
+
+    const role = getUsedCarRoleForParticipant(teacher.id, round.number);
+    if (role === "buyer") {
+      const bid = Number(body.bid);
+      if (!Number.isInteger(bid) || bid < 0 || bid > usedCarState.settings.pieSize) {
+        sendJson(res, 400, {
+          error: `Bid must be an integer between 0 and ${usedCarState.settings.pieSize}.`,
+        });
+        return;
+      }
+      if (round.status !== "buyer_collecting") {
+        sendJson(res, 409, { error: "The buyer stage is not open." });
+        return;
+      }
+      if (round.bids[teacher.id] != null) {
+        sendJson(res, 409, { error: "Teacher bid has already been submitted." });
+        return;
+      }
+      round.bids[teacher.id] = bid;
+      sendJson(res, 200, usedCarTeacherState(origin));
+      return;
+    }
+
+    if (role === "seller") {
+      const decision = body.decision;
+      if (!["sell", "keep"].includes(decision)) {
+        sendJson(res, 400, { error: "Decision must be sell or keep." });
+        return;
+      }
+      if (round.status !== "seller_collecting") {
+        sendJson(res, 409, { error: "The seller stage is not open." });
+        return;
+      }
+      if (round.sellerDecisions[teacher.id]) {
+        sendJson(res, 409, { error: "Teacher decision has already been submitted." });
+        return;
+      }
+      round.sellerDecisions[teacher.id] = decision;
+      sendJson(res, 200, usedCarTeacherState(origin));
+      return;
+    }
+
+    sendJson(res, 409, { error: "Teacher has no active role this round." });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/used-car/student/join") {
+    const body = await getRequestBody(req);
+    const token = typeof body.token === "string" ? body.token : "";
+    const name = typeof body.name === "string" ? body.name.trim().slice(0, 30) : "";
+    const normalized = normalizeName(name);
+
+    if (usedCarState.status === "setup") {
+      sendJson(res, 409, {
+        error: "The teacher has not saved the used-car settings yet.",
+      });
+      return;
+    }
+    if (!name) {
+      sendJson(res, 400, { error: "Please enter your name or alias." });
+      return;
+    }
+
+    let participant = token ? getUsedCarParticipantByToken(token) : null;
+    if (participant) {
+      sendJson(res, 200, {
+        token: participant.token,
+        id: participant.id,
+        name: participant.name,
+        sessionCode: usedCarState.sessionCode,
+      });
+      return;
+    }
+
+    const sameNameParticipant = usedCarState.participants.find(
+      (item) => item.joined && !item.isTeacher && normalizeName(item.name) === normalized
+    );
+    if (sameNameParticipant) {
+      sendJson(res, 200, {
+        token: sameNameParticipant.token,
+        id: sameNameParticipant.id,
+        name: sameNameParticipant.name,
+        sessionCode: usedCarState.sessionCode,
+        rejoined: true,
+      });
+      return;
+    }
+
+    if (!(usedCarState.status === "lobby" && usedCarState.currentRound === 0)) {
+      sendJson(res, 409, {
+        error: "New players can only join before Round 1 starts.",
+      });
+      return;
+    }
+
+    const available = shuffle(
+      usedCarState.participants.filter((item) => !item.joined && !item.isTeacher)
+    );
+    participant = available[0] || null;
+    if (!participant) {
+      sendJson(res, 409, { error: "All participant slots are already full." });
+      return;
+    }
+
+    participant.token = crypto.randomUUID();
+    participant.joined = true;
+    participant.name = name;
+    sendJson(res, 200, {
+      token: participant.token,
+      id: participant.id,
+      name: participant.name,
+      sessionCode: usedCarState.sessionCode,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/used-car/student/state") {
+    const token = url.searchParams.get("token") || "";
+    const participant = getUsedCarParticipantByToken(token);
+    if (!participant) {
+      sendJson(res, 404, { error: "ID not found. Please rejoin." });
+      return;
+    }
+
+    const round = getUsedCarRound();
+    const role =
+      round && participant.joined
+        ? getUsedCarRoleForParticipant(participant.id, round.number)
+        : null;
+    const pair =
+      round?.pairs.find(
+        (item) => item.buyerId === participant.id || item.sellerId === participant.id
+      ) || null;
+
+    sendJson(res, 200, {
+      ...usedCarBaseState(origin),
+      participant: {
+        id: participant.id,
+        name: participant.name,
+        cumulative: participant.cumulative,
+        history: participant.history,
+      },
+      currentRoundDetail: round
+        ? {
+            number: round.number,
+            stage: round.stage,
+            status: round.status,
+            role,
+            canSubmitBid:
+              role === "buyer" &&
+              round.status === "buyer_collecting" &&
+              round.bids[participant.id] == null,
+            canSubmitDecision:
+              role === "seller" &&
+              round.status === "seller_collecting" &&
+              !round.sellerDecisions[participant.id],
+            submittedBid: round.bids[participant.id] ?? null,
+            ownQuality:
+              role === "seller"
+                ? round.sellerQualities[participant.id] ??
+                  getUsedCarRolesForRound(round.number).qualities[participant.id] ??
+                  null
+                : null,
+            receivedBid:
+              role === "seller"
+                ? round.pendingSellerBids[participant.id] ?? pair?.bid ?? null
+                : null,
+            submittedDecision: round.sellerDecisions[participant.id] || null,
+            settledPair:
+              round.status === "closed" && pair
+                ? {
+                    bid: pair.bid,
+                    sold: pair.sold,
+                    quality:
+                      role === "seller" ? pair.quality : pair.sold ? pair.quality : null,
+                    payoff:
+                      role === "buyer" ? pair.buyerPayoff : pair.sellerPayoff,
+                  }
+                : null,
+          }
+        : null,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/used-car/student/submit-bid") {
+    const body = await getRequestBody(req);
+    const token = typeof body.token === "string" ? body.token : "";
+    const bid = Number(body.bid);
+    const participant = getUsedCarParticipantByToken(token);
+    const round = getUsedCarRound();
+
+    if (!participant) {
+      sendJson(res, 404, { error: "ID not found. Please rejoin." });
+      return;
+    }
+    if (!round || round.status !== "buyer_collecting") {
+      sendJson(res, 409, { error: "The buyer stage is not open." });
+      return;
+    }
+    if (getUsedCarRoleForParticipant(participant.id, round.number) !== "buyer") {
+      sendJson(res, 409, { error: "You are not a buyer this round." });
+      return;
+    }
+    if (!Number.isInteger(bid) || bid < 0 || bid > usedCarState.settings.pieSize) {
+      sendJson(res, 400, {
+        error: `Bid must be an integer between 0 and ${usedCarState.settings.pieSize}.`,
+      });
+      return;
+    }
+    if (round.bids[participant.id] != null) {
+      sendJson(res, 409, { error: "You have already submitted this round." });
+      return;
+    }
+
+    round.bids[participant.id] = bid;
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/used-car/student/submit-decision") {
+    const body = await getRequestBody(req);
+    const token = typeof body.token === "string" ? body.token : "";
+    const decision = body.decision;
+    const participant = getUsedCarParticipantByToken(token);
+    const round = getUsedCarRound();
+
+    if (!participant) {
+      sendJson(res, 404, { error: "ID not found. Please rejoin." });
+      return;
+    }
+    if (!round || round.status !== "seller_collecting") {
+      sendJson(res, 409, { error: "The seller stage is not open." });
+      return;
+    }
+    if (getUsedCarRoleForParticipant(participant.id, round.number) !== "seller") {
+      sendJson(res, 409, { error: "You are not a seller this round." });
+      return;
+    }
+    if (!["sell", "keep"].includes(decision)) {
+      sendJson(res, 400, { error: "Decision must be sell or keep." });
+      return;
+    }
+    if (round.sellerDecisions[participant.id]) {
+      sendJson(res, 409, { error: "You have already submitted this round." });
+      return;
+    }
+
+    round.sellerDecisions[participant.id] = decision;
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  sendJson(res, 404, { error: "Endpoint not found." });
+}
+
 async function handlePublicGoodsApi(req, res, url) {
   const origin = getOrigin(req);
 
@@ -1334,6 +2225,10 @@ async function handleUltimatumApi(req, res, url) {
 }
 
 async function handleApi(req, res, url) {
+  if (url.pathname.startsWith("/api/used-car/")) {
+    await handleUsedCarApi(req, res, url);
+    return;
+  }
   if (url.pathname.startsWith("/api/ultimatum/")) {
     await handleUltimatumApi(req, res, url);
     return;

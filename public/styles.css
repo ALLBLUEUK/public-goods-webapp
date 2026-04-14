@@ -193,6 +193,12 @@ button.button:disabled {
   align-items: end;
 }
 
+.inline-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
 label span {
   display: block;
   margin-bottom: 8px;
@@ -292,6 +298,83 @@ select {
 
 .result-card {
   background: linear-gradient(135deg, #f8fdf9, #fff8ef);
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.chart-card {
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+}
+
+.chart-card h4 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.chart {
+  display: grid;
+  gap: 10px;
+  min-height: 120px;
+}
+
+.bar-chart,
+.stack-chart {
+  display: grid;
+  gap: 8px;
+}
+
+.bar-row,
+.stack-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.bar-label,
+.stack-label,
+.bar-value,
+.stack-value {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.bar-track,
+.stack-track {
+  position: relative;
+  min-height: 18px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #eef3f0;
+}
+
+.bar-fill {
+  min-height: 18px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0d7a6b, #59a68f);
+}
+
+.stack-track {
+  display: flex;
+}
+
+.stack-good {
+  background: #0d7a6b;
+}
+
+.stack-lemon {
+  background: #b45309;
+}
+
+.stack-unsold {
+  background: #cad4cf;
 }
 
 .rules-text ul {

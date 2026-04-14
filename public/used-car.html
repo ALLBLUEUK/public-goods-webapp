@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Used Car Market</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero" id="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Used Car Market</p>
+          <h1>二手车市场 Used Car Market</h1>
+          <p class="lead">
+            买家只知道市场里好车和柠檬车各有多少，不知道自己面对的是哪一辆。买家先匿名报价，报价随机送给卖家，卖家再决定卖还是不卖。
+            <br />
+            Buyers know only the market composition, not the quality of the specific car they face. Buyers bid first, bids are randomly sent to sellers, and sellers then decide whether to sell.
+          </p>
+        </div>
+        <div class="hero-actions" id="heroActions">
+          <a class="button" href="/used-car.html?role=teacher">教师端 Teacher</a>
+          <a class="button button-secondary" href="/used-car.html?role=student">学生端 Student</a>
+          <a class="button button-secondary" href="/">返回主页 Home</a>
+        </div>
+      </section>
+
+      <section id="teacherPanel" class="hidden">
+        <header class="page-head">
+          <div>
+            <p class="eyebrow">Teacher Console</p>
+            <h2>教师端 Teacher</h2>
+          </div>
+          <div class="status-row">
+            <span class="pill" id="teacherStatus">Loading</span>
+            <span class="pill" id="teacherSessionCode">Session --</span>
+          </div>
+        </header>
+
+        <article class="card teacher-setup-bar">
+          <div class="split-head">
+            <div>
+              <h3>课堂设置 Classroom Setup</h3>
+              <p class="muted">
+                先保存设置，再让学生进入。默认是 2+2 轮：前两轮角色固定，后两轮整体交换角色。
+                <br />
+                Save the setup first, then let students join. The default is a 2+2 design: roles stay fixed for two rounds, then swap for the final two rounds.
+              </p>
+            </div>
+          </div>
+          <form id="usedCarConfigForm" class="config-grid">
+            <label>
+              <span>学生人数 Student Count</span>
+              <input id="studentCountInput" type="number" min="1" max="40" value="6" />
+            </label>
+            <label>
+              <span>每阶段轮数 Rounds per Phase</span>
+              <input id="phaseRoundsInput" type="number" min="1" max="4" value="2" />
+            </label>
+            <label>
+              <span>最高报价 Bid Ceiling</span>
+              <input id="pieSizeInput" type="number" min="1" max="100" value="10" />
+            </label>
+            <label>
+              <span>奇数时教师补位 Teacher joins if odd</span>
+              <select id="teacherJoinInput">
+                <option value="true">是 Yes</option>
+                <option value="false">否 No</option>
+              </select>
+            </label>
+            <label>
+              <span>每阶段好车数 Good Cars per Phase</span>
+              <input id="goodCarCountInput" type="number" min="0" max="20" value="1" />
+            </label>
+            <label>
+              <span>买家价值 Good / Lemon</span>
+              <div class="inline-split">
+                <input id="buyerValueGoodInput" type="number" value="10" />
+                <input id="buyerValueLemonInput" type="number" value="4" />
+              </div>
+            </label>
+            <label>
+              <span>卖家保留价值 Good / Lemon</span>
+              <div class="inline-split">
+                <input id="sellerKeepGoodInput" type="number" value="8" />
+                <input id="sellerKeepLemonInput" type="number" value="2" />
+              </div>
+            </label>
+            <button class="button" type="submit">保存设置 Save Settings</button>
+          </form>
+        </article>
+
+        <section class="teacher-layout">
+          <article class="card">
+            <h3>规则 Rules</h3>
+            <div class="rules-text">
+              <p><strong>中文</strong></p>
+              <p>买家先匿名报价，报价随机送给卖家。卖家知道自己的车质量，看到报价后决定卖或不卖。</p>
+              <p>如果成交，系统揭示质量并结算。买家得分 = 车辆价值 - 成交价；卖家得分 = 成交价。</p>
+              <p>如果不成交，买家得 0；卖家保留车辆，得自己的保留价值。</p>
+              <p><strong>English</strong></p>
+              <p>Buyers bid first and bids are randomly sent to sellers. Sellers know their own quality and decide whether to sell after seeing the bid.</p>
+              <p>If trade happens, the quality is revealed and payoffs are settled. Buyer payoff = car value - price; seller payoff = price.</p>
+              <p>If there is no trade, the buyer gets 0 and the seller keeps the car at the seller's keep value.</p>
+            </div>
+          </article>
+
+          <article class="card">
+            <h3>课堂控制 Live Control</h3>
+            <div class="button-stack">
+              <button class="button" id="startRoundButton">开始本轮 Start Round</button>
+              <button class="button button-secondary" id="closeBuyersButton">结束买家报价 Close Buyer Bids</button>
+              <button class="button button-secondary" id="closeSellersButton">结束卖家决策并结算 Close Seller Decisions</button>
+              <button class="button button-danger" id="resetButton">重置全部 Reset</button>
+            </div>
+            <div class="kpi-grid">
+              <div class="kpi-box">
+                <span class="kpi-label">当前轮次 Current Round</span>
+                <strong id="roundValue">0</strong>
+              </div>
+              <div class="kpi-box">
+                <span class="kpi-label">当前阶段 Current Stage</span>
+                <strong id="stageValue">1</strong>
+              </div>
+              <div class="kpi-box">
+                <span class="kpi-label">总轮次 Total Rounds</span>
+                <strong id="totalRoundsValue">0</strong>
+              </div>
+              <div class="kpi-box">
+                <span class="kpi-label">已加入 Joined Students</span>
+                <strong id="joinedStudentsValue">0</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="card result-card">
+            <h3>市场构成 Market Composition</h3>
+            <div id="marketCompositionText" class="rules-text">Waiting.</div>
+          </article>
+
+          <article class="card join-card">
+            <h3>学生入口 Student Entry</h3>
+            <div class="link-box" id="joinUrl">Loading</div>
+            <img class="qr" id="qrImage" alt="Join QR code" />
+            <p class="tiny muted">
+              学生只输入名字，系统随机分配匿名编号。交易对手是谁，页面不会显示。
+              <br />
+              Students enter with names, receive random anonymous IDs, and never see who their counterpart is.
+            </p>
+          </article>
+
+          <article class="card">
+            <h3>阶段安排 Stage Plan</h3>
+            <div id="stageRolesText" class="rules-text">Waiting.</div>
+          </article>
+
+          <article class="card">
+            <h3>本轮结果 Round Results</h3>
+            <div id="roundResults" class="rules-text">No settled round yet.</div>
+          </article>
+
+          <article class="card">
+            <h3>教师补位 Teacher Self-Action</h3>
+            <div id="teacherSelfAction" class="rules-text">Teacher is not participating.</div>
+          </article>
+
+          <article class="card card-span">
+            <h3>分析 Analysis</h3>
+            <div id="analysisSummary" class="rules-text">No analysis yet.</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>轮次 Round</th>
+                  <th>阶段 Stage</th>
+                  <th>平均报价 Average Bid</th>
+                  <th>成交数 Trades</th>
+                  <th>成交好车 Good Cars Sold</th>
+                  <th>成交柠檬 Lemon Sold</th>
+                </tr>
+              </thead>
+              <tbody id="analysisRounds"></tbody>
+            </table>
+          </article>
+
+          <article class="card card-span">
+            <h3>图表 Charts</h3>
+            <div class="chart-grid">
+              <div class="chart-card">
+                <h4>报价分布 Bid Distribution</h4>
+                <div id="bidDistributionChart" class="chart"></div>
+              </div>
+              <div class="chart-card">
+                <h4>成交质量构成 Trade Quality Mix</h4>
+                <div id="tradeQualityChart" class="chart"></div>
+              </div>
+              <div class="chart-card">
+                <h4>平均报价趋势 Average Bid Trend</h4>
+                <div id="trendChart" class="chart"></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="card card-span hidden" id="finalRevealCard">
+            <h3>最终揭晓 Final Reveal</h3>
+            <p class="muted">
+              只有全部轮次结束后，才显示匿名编号、姓名和累计得分。
+              <br />
+              Anonymous IDs, names, and cumulative payoffs are revealed only after all rounds finish.
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>排名 Rank</th>
+                  <th>匿名编号 Anonymous ID</th>
+                  <th>姓名 Name</th>
+                  <th>累计得分 Cumulative Payoff</th>
+                </tr>
+              </thead>
+              <tbody id="finalRevealTable"></tbody>
+            </table>
+          </article>
+        </section>
+      </section>
+
+      <section id="studentPanel" class="hidden">
+        <header class="page-head">
+          <div>
+            <p class="eyebrow">Student View</p>
+            <h2>学生端 Student</h2>
+          </div>
+          <div class="status-row">
+            <span class="pill" id="studentStatus">Loading</span>
+            <span class="pill" id="studentIdBadge">ID --</span>
+          </div>
+        </header>
+
+        <section class="student-layout">
+          <article class="card" id="joinCard">
+            <h3>进入实验 Join the Session</h3>
+            <p class="muted">
+              教师保存设置后你才能进入。请输入名字或代号，系统会随机分配匿名编号。
+              <br />
+              You can join only after the teacher saves the setup. Enter your name or alias and the system will assign a random anonymous ID.
+            </p>
+            <form id="joinForm" class="config-grid">
+              <label>
+                <span>名字或代号 Name / Alias</span>
+                <input id="playerNameInput" maxlength="30" />
+              </label>
+              <button class="button" type="submit">进入 Join</button>
+            </form>
+            <p class="tiny muted" id="joinTip">
+              你的交易对象是谁不会显示。Only your own role, bid, and result are shown.
+            </p>
+          </article>
+
+          <article class="card">
+            <h3>你的任务 Your Task</h3>
+            <div id="studentInstruction" class="rules-text">Waiting.</div>
+          </article>
+
+          <div id="studentWorkspace" class="hidden student-grid">
+            <article class="card" id="buyerCard">
+              <h3>买家报价 Buyer Bid</h3>
+              <p id="buyerMarketText" class="rules-text">Waiting.</p>
+              <form id="bidForm" class="decision-grid">
+                <label>
+                  <span>我的报价 My Bid</span>
+                  <input id="bidInput" type="number" min="0" max="10" step="1" value="0" />
+                </label>
+                <button class="button" type="submit">提交报价 Submit Bid</button>
+              </form>
+            </article>
+
+            <article class="card" id="sellerCard">
+              <h3>卖家决策 Seller Decision</h3>
+              <div id="sellerInfoText" class="rules-text">Waiting.</div>
+              <div class="button-stack">
+                <button class="button" id="sellButton" type="button">卖出 Sell</button>
+                <button class="button button-secondary" id="keepButton" type="button">不卖 Keep</button>
+              </div>
+            </article>
+
+            <article class="card">
+              <h3>我的记录 My Record</h3>
+              <div class="kpi-grid compact-grid">
+                <div class="kpi-box">
+                  <span class="kpi-label">累计得分 Cumulative Payoff</span>
+                  <strong id="studentCumulative">0</strong>
+                </div>
+                <div class="kpi-box">
+                  <span class="kpi-label">本轮角色 Role</span>
+                  <strong id="studentRoleValue">--</strong>
+                </div>
+                <div class="kpi-box">
+                  <span class="kpi-label">本轮报价 Bid</span>
+                  <strong id="studentBidValue">--</strong>
+                </div>
+                <div class="kpi-box">
+                  <span class="kpi-label">本轮得分 Round Payoff</span>
+                  <strong id="studentPayoffValue">--</strong>
+                </div>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>轮次 Round</th>
+                    <th>阶段 Stage</th>
+                    <th>角色 Role</th>
+                    <th>报价 Bid</th>
+                    <th>质量 Quality</th>
+                    <th>结果 Outcome</th>
+                    <th>得分 Payoff</th>
+                    <th>累计 Cumulative</th>
+                  </tr>
+                </thead>
+                <tbody id="studentHistory"></tbody>
+              </table>
+            </article>
+          </div>
+        </section>
+      </section>
+    </main>
+    <script src="/used-car.js"></script>
+  </body>
+</html>
