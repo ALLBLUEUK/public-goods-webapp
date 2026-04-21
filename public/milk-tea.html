@@ -15,7 +15,12 @@
           <p class="lead">
             你们 6 个人在同一家奶茶店负责不同工位。每轮爆单时，每个人都要悄悄决定自己这一轮开几档速度。
             <br />
+            Six of you work at different stations in the same milk tea shop. When orders surge, each person secretly chooses how fast to work this round.
+          </p>
+          <p class="lead">
             但整家店最后能跑多快，不看谁最快，只看最慢的那个工位。
+            <br />
+            The shop speed is not determined by the fastest station. It is determined by the slowest one.
           </p>
         </div>
         <div class="hero-actions" id="heroActions">
@@ -43,6 +48,8 @@
               <h3>课堂设置 Classroom Setup</h3>
               <p class="muted">
                 建议直接用默认参数。每轮学生在 1 到 7 档里选一个速度，系统按最慢工位结算全店奖金。
+                <br />
+                The default setup is recommended. Each round, students choose a speed from 1 to 7, and the whole shop is settled using the slowest station.
               </p>
             </div>
           </div>
@@ -123,6 +130,8 @@
             <img class="qr" id="qrImage" alt="Join QR code" />
             <p class="tiny muted">
               建议投屏老师端，学生扫码进入自己的工位页面。
+              <br />
+              It is best to project the teacher view while students scan to open their own station pages.
             </p>
           </article>
 
@@ -198,6 +207,8 @@
             <h3>进入课堂 Join the Session</h3>
             <p class="muted">
               请输入你的名字或代号。加入后系统会分配你的工位，请尽量使用同一台设备完成整场实验。
+              <br />
+              Enter your name or alias. After joining, the system will assign your station. Try to use the same device for the whole session.
             </p>
             <form id="joinForm" class="config-grid">
               <label>
@@ -206,7 +217,7 @@
               </label>
               <button class="button" type="submit">进入 Join</button>
             </form>
-            <p class="tiny muted" id="joinTip">老师保存设置后才能加入，而且必须在第一轮开始前进入。</p>
+            <p class="tiny muted" id="joinTip">The teacher must save the settings before students can join.</p>
           </article>
 
           <article class="card">
@@ -217,10 +228,14 @@
           <div id="studentWorkspace" class="hidden student-grid">
             <article class="card">
               <h3>本轮决定 Current Decision</h3>
-              <p class="muted" id="studentInstruction">等待老师开始本轮。</p>
+              <p class="muted" id="studentInstruction">Waiting for the teacher to start the round.</p>
               <div class="callout">
-                <strong id="studentStationTitle">你的工位：--</strong>
-                <p class="muted">档位越高，你这个工位越快，但也会更累。</p>
+                <strong id="studentStationTitle">你的工位 / Your station: --</strong>
+                <p class="muted">
+                  档位越高，你这个工位越快，但也越累。
+                  <br />
+                  A higher speed makes your station faster, but also more tiring.
+                </p>
               </div>
               <form id="submitForm">
                 <input id="speedInput" type="hidden" value="1" />
