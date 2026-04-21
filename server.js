@@ -296,6 +296,239 @@ function applyPublicGoodsRoundResults(round) {
   }
 }
 
+const MILK_TEA_STATIONS = [
+  "Order",
+  "Toppings",
+  "Shake",
+  "Seal",
+  "Pack",
+  "Pickup",
+];
+
+function createMilkTeaPlayers(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    seat: index + 1,
+    station: MILK_TEA_STATIONS[index] || `Station ${index + 1}`,
+    name: "",
+    token: "",
+    joinedAt: "",
+    cumulative: 0,
+    history: [],
+  }));
+}
+
+function freshMilkTeaState() {
+  const defaults = {
+    seatCount: 6,
+    maxRounds: 5,
+    maxSpeed: 7,
+    bonusPerShopSpeed: 2,
+    costPerOwnSpeed: 1,
+  };
+
+  return {
+    sessionId: crypto.randomUUID(),
+    sessionCode: randomCode(),
+    status: "setup",
+    currentRound: 0,
+    createdAt: new Date().toISOString(),
+    settings: defaults,
+    players: createMilkTeaPlayers(defaults.seatCount),
+    rounds: [],
+  };
+}
+
+let milkTeaState = freshMilkTeaState();
+
+function getMilkTeaRound() {
+  return milkTeaState.rounds[milkTeaState.currentRound - 1] || null;
+}
+
+function milkTeaPlayerByToken(token) {
+  return milkTeaState.players.find((player) => player.token === token) || null;
+}
+
+function validateMilkTeaSettings(settings) {
+  const seatCount = Number(settings.seatCount);
+  const maxRounds = Number(settings.maxRounds);
+  const maxSpeed = Number(settings.maxSpeed);
+  const bonusPerShopSpeed = Number(settings.bonusPerShopSpeed);
+  const costPerOwnSpeed = Number(settings.costPerOwnSpeed);
+
+  if (!Number.isInteger(seatCount) || seatCount < 2 || seatCount > 6) {
+    throw new Error("Players must be an integer between 2 and 6.");
+  }
+  if (!Number.isInteger(maxRounds) || maxRounds < 1 || maxRounds > 10) {
+    throw new Error("Rounds must be an integer between 1 and 10.");
+  }
+  if (!Number.isInteger(maxSpeed) || maxSpeed < 3 || maxSpeed > 9) {
+    throw new Error("Top speed must be an integer between 3 and 9.");
+  }
+  if (
+    !Number.isInteger(bonusPerShopSpeed) ||
+    bonusPerShopSpeed < 1 ||
+    bonusPerShopSpeed > 20
+  ) {
+    throw new Error("Team bonus per shop speed must be an integer between 1 and 20.");
+  }
+  if (
+    !Number.isInteger(costPerOwnSpeed) ||
+    costPerOwnSpeed < 0 ||
+    costPerOwnSpeed > 10
+  ) {
+    throw new Error("Tiredness cost per own speed must be an integer between 0 and 10.");
+  }
+
+  return {
+    seatCount,
+    maxRounds,
+    maxSpeed,
+    bonusPerShopSpeed,
+    costPerOwnSpeed,
+  };
+}
+
+function milkTeaRoundSummary(round) {
+  if (!round) {
+    return null;
+  }
+  return {
+    number: round.number,
+    status: round.status,
+    submittedCount: round.submissions.length,
+    actualSpeed: round.status === "closed" ? round.actualSpeed : null,
+    averageChoice: round.status === "closed" ? round.averageChoice : null,
+    teamBonus: round.status === "closed" ? round.teamBonus : null,
+  };
+}
+
+function milkTeaRanking() {
+  return milkTeaState.players
+    .filter((player) => player.token)
+    .map((player) => ({
+      seat: player.seat,
+      station: player.station,
+      cumulative: player.cumulative,
+      roundsPlayed: player.history.length,
+    }))
+    .sort((a, b) => b.cumulative - a.cumulative || a.seat - b.seat);
+}
+
+function milkTeaBaseState(origin) {
+  return {
+    sessionId: milkTeaState.sessionId,
+    sessionCode: milkTeaState.sessionCode,
+    status: milkTeaState.status,
+    currentRound: milkTeaState.currentRound,
+    settings: milkTeaState.settings,
+    joinedCount: milkTeaState.players.filter((player) => player.token).length,
+    joinUrl: `${origin}/milk-tea.html?role=student`,
+    teacherUrl: `${origin}/milk-tea.html?role=teacher`,
+    players: milkTeaState.players.map((player) => ({
+      seat: player.seat,
+      station: player.station,
+      name: player.name,
+      joined: Boolean(player.token),
+      cumulative: player.cumulative,
+    })),
+    currentRoundSummary: milkTeaRoundSummary(getMilkTeaRound()),
+    roundHistory: milkTeaState.rounds
+      .filter((round) => round.status === "closed")
+      .map((round) => ({
+        number: round.number,
+        actualSpeed: round.actualSpeed,
+        averageChoice: round.averageChoice,
+        teamBonus: round.teamBonus,
+        submittedCount: round.submissions.length,
+      })),
+    ranking: milkTeaRanking(),
+  };
+}
+
+function milkTeaTeacherState(origin) {
+  const round = getMilkTeaRound();
+  return {
+    ...milkTeaBaseState(origin),
+    currentRoundSummary: round
+      ? {
+          number: round.number,
+          status: round.status,
+          submittedCount: round.submissions.length,
+          actualSpeed: round.actualSpeed,
+          averageChoice: round.averageChoice,
+          teamBonus: round.teamBonus,
+          submissions: round.submissions.map((item) => ({
+            seat: item.seat,
+            speed: item.speed,
+          })),
+          resolvedChoices: round.resolvedChoices || [],
+        }
+      : null,
+    players: milkTeaState.players.map((player) => ({
+      seat: player.seat,
+      station: player.station,
+      name: player.name,
+      joined: Boolean(player.token),
+      cumulative: player.cumulative,
+      history: player.history,
+    })),
+  };
+}
+
+function resetMilkTeaSession() {
+  milkTeaState = freshMilkTeaState();
+}
+
+function applyMilkTeaRoundResults(round) {
+  const { bonusPerShopSpeed, costPerOwnSpeed } = milkTeaState.settings;
+  const activePlayers = milkTeaState.players.filter((player) => player.token);
+  const resolvedChoices = activePlayers.map((player) => {
+    const submission = round.submissions.find((item) => item.seat === player.seat);
+    return {
+      seat: player.seat,
+      station: player.station,
+      speed: submission ? submission.speed : 1,
+      defaulted: !submission,
+    };
+  });
+
+  round.actualSpeed = resolvedChoices.length
+    ? Math.min(...resolvedChoices.map((item) => item.speed))
+    : 1;
+  round.averageChoice = average(resolvedChoices.map((item) => item.speed));
+  round.teamBonus = round.actualSpeed * bonusPerShopSpeed;
+  round.resolvedChoices = resolvedChoices.map((item) => ({
+    ...item,
+    personalCost: item.speed * costPerOwnSpeed,
+    takeHome: round.teamBonus - item.speed * costPerOwnSpeed,
+  }));
+  round.status = "closed";
+  round.closedAt = new Date().toISOString();
+
+  for (const player of activePlayers) {
+    const choice = round.resolvedChoices.find((item) => item.seat === player.seat);
+    player.cumulative += choice.takeHome;
+    player.history.push({
+      round: round.number,
+      station: player.station,
+      selectedSpeed: choice.speed,
+      defaulted: choice.defaulted,
+      actualSpeed: round.actualSpeed,
+      averageChoice: round.averageChoice,
+      teamBonus: round.teamBonus,
+      personalCost: choice.personalCost,
+      takeHome: choice.takeHome,
+      cumulative: player.cumulative,
+    });
+  }
+
+  if (round.number >= milkTeaState.settings.maxRounds) {
+    milkTeaState.status = "finished";
+  } else {
+    milkTeaState.status = "results";
+  }
+}
+
 function createUltimatumParticipants(count, teacherJoinsIfOdd) {
   const participants = [];
   for (let id = 1; id <= count; id += 1) {
@@ -1606,6 +1839,250 @@ async function handleUsedCarApi(req, res, url) {
   sendJson(res, 404, { error: "Endpoint not found." });
 }
 
+async function handleMilkTeaApi(req, res, url) {
+  const origin = getOrigin(req);
+
+  if (req.method === "GET" && url.pathname === "/api/milk-tea/meta") {
+    sendJson(res, 200, milkTeaBaseState(origin));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/milk-tea/teacher/state") {
+    sendJson(res, 200, milkTeaTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/milk-tea/teacher/reset") {
+    resetMilkTeaSession();
+    sendJson(res, 200, milkTeaTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/milk-tea/teacher/configure") {
+    const body = await getRequestBody(req);
+    if (
+      milkTeaState.currentRound > 0 ||
+      milkTeaState.players.some((player) => player.token)
+    ) {
+      sendJson(res, 409, {
+        error:
+          "Students have already joined or rounds have already started. Reset first before changing settings.",
+      });
+      return;
+    }
+
+    try {
+      const settings = validateMilkTeaSettings(body);
+      milkTeaState.settings = settings;
+      milkTeaState.players = createMilkTeaPlayers(settings.seatCount);
+      milkTeaState.status = "lobby";
+      sendJson(res, 200, milkTeaTeacherState(origin));
+    } catch (error) {
+      sendJson(res, 400, { error: error.message });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/milk-tea/teacher/start-round") {
+    if (milkTeaState.status === "collecting") {
+      sendJson(res, 409, { error: "A round is already open." });
+      return;
+    }
+    if (milkTeaState.status === "setup") {
+      sendJson(res, 409, { error: "Configure the session first." });
+      return;
+    }
+    if (milkTeaState.currentRound >= milkTeaState.settings.maxRounds) {
+      sendJson(res, 409, { error: "All rounds are already finished." });
+      return;
+    }
+    if (milkTeaState.players.filter((player) => player.token).length !== milkTeaState.settings.seatCount) {
+      sendJson(res, 409, {
+        error: "All stations must join before the teacher can start the round.",
+      });
+      return;
+    }
+
+    milkTeaState.currentRound += 1;
+    milkTeaState.status = "collecting";
+    milkTeaState.rounds.push({
+      number: milkTeaState.currentRound,
+      status: "collecting",
+      actualSpeed: null,
+      averageChoice: null,
+      teamBonus: null,
+      submissions: [],
+      resolvedChoices: [],
+      openedAt: new Date().toISOString(),
+      closedAt: null,
+    });
+
+    sendJson(res, 200, milkTeaTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/milk-tea/teacher/close-round") {
+    const round = getMilkTeaRound();
+    if (!round || round.status !== "collecting") {
+      sendJson(res, 409, { error: "There is no open round to close." });
+      return;
+    }
+
+    applyMilkTeaRoundResults(round);
+    sendJson(res, 200, milkTeaTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/milk-tea/student/join") {
+    const body = await getRequestBody(req);
+    const token = typeof body.token === "string" ? body.token : "";
+    const name = typeof body.name === "string" ? body.name.trim().slice(0, 30) : "";
+    const normalized = normalizeName(name);
+
+    if (milkTeaState.status === "setup") {
+      sendJson(res, 409, {
+        error: "The teacher has not saved the milk tea rush settings yet.",
+      });
+      return;
+    }
+
+    if (!(milkTeaState.status === "lobby" && milkTeaState.currentRound === 0)) {
+      sendJson(res, 409, {
+        error: "New players can only join before Round 1 starts.",
+      });
+      return;
+    }
+
+    if (!name) {
+      sendJson(res, 400, { error: "Name or alias cannot be empty." });
+      return;
+    }
+
+    const sameNamePlayer = milkTeaState.players.find(
+      (player) => player.token && normalizeName(player.name) === normalized
+    );
+    if (sameNamePlayer && sameNamePlayer.token !== token) {
+      sendJson(res, 200, {
+        token: sameNamePlayer.token,
+        seat: sameNamePlayer.seat,
+        station: sameNamePlayer.station,
+        name: sameNamePlayer.name,
+        sessionCode: milkTeaState.sessionCode,
+        rejoined: true,
+      });
+      return;
+    }
+
+    let player = token ? milkTeaPlayerByToken(token) : null;
+    if (!player) {
+      player = milkTeaState.players.find((item) => !item.token) || null;
+    }
+    if (!player) {
+      sendJson(res, 409, { error: "The session is already full." });
+      return;
+    }
+
+    if (!player.token) {
+      player.token = crypto.randomUUID();
+      player.joinedAt = new Date().toISOString();
+    }
+    player.name = name;
+
+    sendJson(res, 200, {
+      token: player.token,
+      seat: player.seat,
+      station: player.station,
+      name: player.name,
+      sessionCode: milkTeaState.sessionCode,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/milk-tea/student/state") {
+    const token = url.searchParams.get("token") || "";
+    const player = milkTeaPlayerByToken(token);
+    if (!player) {
+      sendJson(res, 404, { error: "Student identity not found. Please rejoin." });
+      return;
+    }
+
+    const round = getMilkTeaRound();
+    const ownSubmission =
+      round?.submissions.find((item) => item.seat === player.seat) || null;
+    const ownResolved =
+      round?.resolvedChoices.find((item) => item.seat === player.seat) || null;
+
+    sendJson(res, 200, {
+      ...milkTeaBaseState(origin),
+      player: {
+        seat: player.seat,
+        station: player.station,
+        name: player.name,
+        cumulative: player.cumulative,
+        history: player.history,
+      },
+      currentRoundSummary: round
+        ? {
+            number: round.number,
+            status: round.status,
+            submitted: Boolean(ownSubmission),
+            ownSpeed: ownSubmission ? ownSubmission.speed : null,
+            actualSpeed: round.status === "closed" ? round.actualSpeed : null,
+            averageChoice: round.status === "closed" ? round.averageChoice : null,
+            teamBonus: round.status === "closed" ? round.teamBonus : null,
+            personalCost: ownResolved ? ownResolved.personalCost : null,
+            takeHome: ownResolved ? ownResolved.takeHome : null,
+            defaulted: ownResolved ? ownResolved.defaulted : false,
+          }
+        : null,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/milk-tea/student/submit-speed") {
+    const body = await getRequestBody(req);
+    const token = typeof body.token === "string" ? body.token : "";
+    const speed = Number(body.speed);
+    const player = milkTeaPlayerByToken(token);
+    const round = getMilkTeaRound();
+
+    if (!player) {
+      sendJson(res, 404, { error: "Student identity not found. Please rejoin." });
+      return;
+    }
+    if (!round || round.status !== "collecting") {
+      sendJson(res, 409, { error: "The round is not open for speed choices." });
+      return;
+    }
+    if (
+      !Number.isInteger(speed) ||
+      speed < 1 ||
+      speed > milkTeaState.settings.maxSpeed
+    ) {
+      sendJson(res, 400, {
+        error: `Speed must be an integer between 1 and ${milkTeaState.settings.maxSpeed}.`,
+      });
+      return;
+    }
+
+    const existing = round.submissions.find((item) => item.seat === player.seat);
+    if (existing) {
+      sendJson(res, 409, { error: "You have already submitted this round." });
+      return;
+    }
+
+    round.submissions.push({
+      seat: player.seat,
+      speed,
+      submittedAt: new Date().toISOString(),
+    });
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  sendJson(res, 404, { error: "Endpoint not found." });
+}
+
 async function handlePublicGoodsApi(req, res, url) {
   const origin = getOrigin(req);
 
@@ -2231,6 +2708,10 @@ async function handleApi(req, res, url) {
   }
   if (url.pathname.startsWith("/api/ultimatum/")) {
     await handleUltimatumApi(req, res, url);
+    return;
+  }
+  if (url.pathname.startsWith("/api/milk-tea/")) {
+    await handleMilkTeaApi(req, res, url);
     return;
   }
   await handlePublicGoodsApi(req, res, url);
