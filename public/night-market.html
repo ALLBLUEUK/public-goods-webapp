@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Night Market Entry Game</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero" id="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Night Market Entry Game</p>
+          <h1>夜市摆摊挑战 Night Market Entry Game</h1>
+          <p class="lead">
+            你们都在考虑今晚要不要去夜市摆摊。进场的人越多，每个摊位分到的顾客就越少。
+            <br />
+            Each of you is deciding whether to enter the night market tonight. The more stalls enter, the fewer customers each stall gets.
+          </p>
+          <p class="lead">
+            如果你进场，还要决定摆几个小时。人少时多摆更赚钱，人太多时多摆反而可能亏钱。
+            <br />
+            If you enter, you must also choose how many hours to stay open. When few stalls enter, longer hours can pay off. When too many enter, longer hours can actually lose money.
+          </p>
+        </div>
+        <div class="hero-actions" id="heroActions">
+          <a class="button" href="/night-market.html?role=teacher">教师端 Teacher</a>
+          <a class="button button-secondary" href="/night-market.html?role=student">学生端 Student</a>
+          <a class="button button-secondary" href="/">返回首页 Home</a>
+        </div>
+      </section>
+
+      <section class="hidden" id="teacherPanel">
+        <header class="page-head">
+          <div>
+            <p class="eyebrow">Teacher Console</p>
+            <h2>教师端 Teacher</h2>
+          </div>
+          <div class="status-row">
+            <span class="pill" id="teacherStatus">Loading</span>
+            <span class="pill" id="teacherSessionCode">Session --</span>
+          </div>
+        </header>
+
+        <article class="card teacher-setup-bar">
+          <div class="split-head">
+            <div>
+              <h3>课堂设置 Classroom Setup</h3>
+              <p class="muted">
+                建议先用默认参数。学生每轮先决定进不进夜市，再决定摆几个小时。
+                <br />
+                The default setup is recommended. Each round, students first decide whether to enter the market and then choose how many hours to stay open.
+              </p>
+            </div>
+          </div>
+          <form id="configForm" class="config-grid">
+            <label>
+              <span>人数 Players</span>
+              <input id="seatCountInput" type="number" min="2" max="6" value="6" />
+            </label>
+            <label>
+              <span>轮数 Planned Rounds</span>
+              <input id="maxRoundsInput" type="number" min="1" max="10" value="5" />
+            </label>
+            <label>
+              <span>最长摆摊小时 Max Open Hours</span>
+              <input id="maxHoursInput" type="number" min="1" max="8" value="4" />
+            </label>
+            <label>
+              <span>单摊起始每小时收入 Base Revenue per Hour</span>
+              <input id="baseRevenuePerHourInput" type="number" min="1" max="50" value="16" />
+            </label>
+            <label>
+              <span>每多一摊的客流下降 Crowd Penalty</span>
+              <input id="crowdPenaltyInput" type="number" min="0" max="20" value="3" />
+            </label>
+            <label>
+              <span>每小时运营成本 Hourly Cost</span>
+              <input id="hourlyCostInput" type="number" min="0" max="20" value="5" />
+            </label>
+            <label>
+              <span>摊位固定费 Stall Fee</span>
+              <input id="stallFeeInput" type="number" min="0" max="30" value="2" />
+            </label>
+            <button class="button" type="submit">保存设置 Save Settings</button>
+          </form>
+        </article>
+
+        <section class="teacher-layout">
+          <article class="card rules-card">
+            <h3>投屏规则 Rules for Projection</h3>
+            <div id="teacherRules" class="rules-text"></div>
+          </article>
+
+          <article class="card control-card">
+            <h3>课堂控制 Live Control</h3>
+            <div class="button-stack">
+              <button class="button" id="startRoundButton">开始下一轮 Start Round</button>
+              <button class="button button-secondary" id="closeRoundButton">结束本轮 End Round</button>
+              <button class="button button-danger" id="resetButton">重置全部 Reset</button>
+            </div>
+            <div class="kpi-grid">
+              <div class="kpi-box">
+                <span class="kpi-label">当前轮次 Current Round</span>
+                <strong id="currentRoundValue">0</strong>
+              </div>
+              <div class="kpi-box">
+                <span class="kpi-label">计划轮次 Planned Rounds</span>
+                <strong id="plannedRoundsValue">0</strong>
+              </div>
+              <div class="kpi-box">
+                <span class="kpi-label">已加入 Joined</span>
+                <strong id="joinedCountValue">0</strong>
+              </div>
+              <div class="kpi-box">
+                <span class="kpi-label">已提交 Submitted</span>
+                <strong id="submittedCountValue">0</strong>
+              </div>
+              <div class="kpi-box accent-box">
+                <span class="kpi-label">进场摊位 Entrants</span>
+                <strong id="entrantsCountValue">--</strong>
+              </div>
+              <div class="kpi-box accent-box">
+                <span class="kpi-label">每小时收入 Revenue per Hour</span>
+                <strong id="revenuePerHourValue">--</strong>
+              </div>
+              <div class="kpi-box accent-box">
+                <span class="kpi-label">平均营业小时 Average Hours</span>
+                <strong id="averageHoursValue">--</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="card result-card">
+            <h3>本轮结果 Round Result</h3>
+            <div id="roundResultText" class="result-text">No round has been closed yet.</div>
+          </article>
+
+          <article class="card join-card">
+            <h3>学生入口 Student Entry</h3>
+            <div class="link-box" id="joinUrl">Loading</div>
+            <img class="qr" id="qrImage" alt="Join QR code" />
+            <p class="tiny muted">
+              建议投屏老师端，学生扫码进入自己的摊位页面。
+              <br />
+              It is best to project the teacher view while students scan to open their own stall pages.
+            </p>
+          </article>
+
+          <article class="card">
+            <h3>摊位状态 Stalls</h3>
+            <div id="stallBoard" class="seat-board"></div>
+          </article>
+
+          <article class="card">
+            <h3>累计到手 Ranking</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>排名 Rank</th>
+                  <th id="rankingNameHeader" class="hidden">姓名 Name</th>
+                  <th>摊位 Stall</th>
+                  <th>累计到手 Total</th>
+                </tr>
+              </thead>
+              <tbody id="rankingTable"></tbody>
+            </table>
+          </article>
+
+          <article class="card card-span">
+            <h3>本轮明细 Round Detail</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>座位 Seat</th>
+                  <th>摊位 Stall</th>
+                  <th>决定 Choice</th>
+                  <th>小时 Hours</th>
+                  <th>每小时收入 Revenue per Hour</th>
+                  <th>到手 Take Home</th>
+                </tr>
+              </thead>
+              <tbody id="roundDetailTable"></tbody>
+            </table>
+          </article>
+
+          <article class="card card-span">
+            <h3>轮次记录 Round History</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>轮次 Round</th>
+                  <th>进场摊位 Entrants</th>
+                  <th>每小时收入 Revenue per Hour</th>
+                  <th>平均营业小时 Average Hours</th>
+                  <th>总营业小时 Total Hours</th>
+                  <th>已提交 Submitted</th>
+                </tr>
+              </thead>
+              <tbody id="historyTable"></tbody>
+            </table>
+          </article>
+        </section>
+      </section>
+
+      <section class="hidden" id="studentPanel">
+        <header class="page-head">
+          <div>
+            <p class="eyebrow">Student View</p>
+            <h2>学生端 Student</h2>
+          </div>
+          <div class="status-row">
+            <span class="pill" id="studentStatus">Loading</span>
+            <span class="pill" id="studentSeatBadge">Seat --</span>
+          </div>
+        </header>
+
+        <section class="student-layout">
+          <article class="card" id="joinCard">
+            <h3>进入课堂 Join the Session</h3>
+            <p class="muted">
+              请输入你的名字或代号。加入后系统会分配你的摊位，请尽量使用同一台设备完成整场实验。
+              <br />
+              Enter your name or alias. After joining, the system will assign your stall. Try to use the same device for the whole session.
+            </p>
+            <form id="joinForm" class="config-grid">
+              <label>
+                <span>名字或代号 Name / Alias</span>
+                <input id="nameInput" maxlength="30" placeholder="例如 Example: A / Team 1" />
+              </label>
+              <button class="button" type="submit">进入 Join</button>
+            </form>
+            <p class="tiny muted" id="joinTip">The teacher must save the settings before students can join.</p>
+          </article>
+
+          <article class="card">
+            <h3>学生规则 Student Rules</h3>
+            <div id="studentRules" class="rules-text"></div>
+          </article>
+
+          <div id="studentWorkspace" class="hidden student-grid">
+            <article class="card">
+              <h3>本轮决定 Current Decision</h3>
+              <p class="muted" id="studentInstruction">Waiting for the teacher to start the round.</p>
+              <div class="callout">
+                <strong id="studentStallTitle">你的摊位 / Your stall: --</strong>
+                <p class="muted">
+                  先决定进不进夜市；如果进场，再决定摆几个小时。
+                  <br />
+                  First decide whether to enter the market; if you enter, then choose how many hours to stay open.
+                </p>
+              </div>
+              <form id="submitForm">
+                <input id="enterInput" type="hidden" value="false" />
+                <input id="hoursInput" type="hidden" value="1" />
+
+                <h4>今晚要不要进夜市？ / Will you enter the market tonight?</h4>
+                <div id="entryChoices" class="choice-grid"></div>
+
+                <h4>如果进场，准备摆几个小时？ / If you enter, how many hours will you stay open?</h4>
+                <div id="hourChoices" class="choice-grid"></div>
+
+                <div class="button-stack">
+                  <button class="button" type="submit">提交本轮决定 Submit Choice</button>
+                </div>
+              </form>
+
+              <div class="kpi-grid compact-grid">
+                <div class="kpi-box">
+                  <span class="kpi-label">我的决定 My Choice</span>
+                  <strong id="studentOwnEntry">--</strong>
+                </div>
+                <div class="kpi-box">
+                  <span class="kpi-label">营业小时 Open Hours</span>
+                  <strong id="studentOwnHours">--</strong>
+                </div>
+                <div class="kpi-box accent-box">
+                  <span class="kpi-label">进场摊位 Entrants</span>
+                  <strong id="studentEntrantsCount">--</strong>
+                </div>
+                <div class="kpi-box">
+                  <span class="kpi-label">每小时收入 Revenue per Hour</span>
+                  <strong id="studentRevenuePerHour">--</strong>
+                </div>
+                <div class="kpi-box accent-box">
+                  <span class="kpi-label">本轮到手 Take Home</span>
+                  <strong id="studentTakeHome">--</strong>
+                </div>
+                <div class="kpi-box">
+                  <span class="kpi-label">累计到手 Total</span>
+                  <strong id="studentCumulative">0</strong>
+                </div>
+              </div>
+            </article>
+
+            <article class="card">
+              <h3>我的记录 My History</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>轮次 Round</th>
+                    <th>决定 Choice</th>
+                    <th>小时 Hours</th>
+                    <th>进场摊位 Entrants</th>
+                    <th>每小时收入 Revenue per Hour</th>
+                    <th>到手 Take Home</th>
+                    <th>累计 Total</th>
+                  </tr>
+                </thead>
+                <tbody id="studentHistory"></tbody>
+              </table>
+            </article>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/night-market.js"></script>
+  </body>
+</html>

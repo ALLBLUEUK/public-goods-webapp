@@ -439,6 +439,56 @@ select {
   cursor: not-allowed;
 }
 
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin: 12px 0 16px;
+}
+
+.choice-button {
+  min-height: 84px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface-strong);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: center;
+}
+
+.choice-button strong,
+.choice-button span {
+  display: block;
+}
+
+.choice-button strong {
+  margin-bottom: 6px;
+  font-size: 20px;
+}
+
+.choice-button span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.choice-button.active {
+  border-color: rgba(13, 122, 107, 0.45);
+  background: #edf7f4;
+  box-shadow: inset 0 0 0 2px rgba(13, 122, 107, 0.16);
+}
+
+.choice-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rules-table td,
+.rules-table th {
+  font-size: 13px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

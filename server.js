@@ -529,6 +529,284 @@ function applyMilkTeaRoundResults(round) {
   }
 }
 
+const NIGHT_MARKET_STALLS = [
+  "Lemon Tea",
+  "Takoyaki",
+  "Fried Chicken",
+  "Grilled Sausage",
+  "Roast Corn",
+  "Cotton Candy",
+];
+
+function createNightMarketPlayers(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    seat: index + 1,
+    stall: NIGHT_MARKET_STALLS[index] || `Stall ${index + 1}`,
+    name: "",
+    token: "",
+    joinedAt: "",
+    cumulative: 0,
+    history: [],
+  }));
+}
+
+function freshNightMarketState() {
+  const defaults = {
+    seatCount: 6,
+    maxRounds: 5,
+    maxHours: 4,
+    baseRevenuePerHour: 16,
+    crowdPenalty: 3,
+    hourlyCost: 5,
+    stallFee: 2,
+  };
+
+  return {
+    sessionId: crypto.randomUUID(),
+    sessionCode: randomCode(),
+    status: "setup",
+    currentRound: 0,
+    createdAt: new Date().toISOString(),
+    settings: defaults,
+    players: createNightMarketPlayers(defaults.seatCount),
+    rounds: [],
+  };
+}
+
+let nightMarketState = freshNightMarketState();
+
+function getNightMarketRound() {
+  return nightMarketState.rounds[nightMarketState.currentRound - 1] || null;
+}
+
+function nightMarketPlayerByToken(token) {
+  return nightMarketState.players.find((player) => player.token === token) || null;
+}
+
+function validateNightMarketSettings(settings) {
+  const seatCount = Number(settings.seatCount);
+  const maxRounds = Number(settings.maxRounds);
+  const maxHours = Number(settings.maxHours);
+  const baseRevenuePerHour = Number(settings.baseRevenuePerHour);
+  const crowdPenalty = Number(settings.crowdPenalty);
+  const hourlyCost = Number(settings.hourlyCost);
+  const stallFee = Number(settings.stallFee);
+
+  if (!Number.isInteger(seatCount) || seatCount < 2 || seatCount > 6) {
+    throw new Error("Players must be an integer between 2 and 6.");
+  }
+  if (!Number.isInteger(maxRounds) || maxRounds < 1 || maxRounds > 10) {
+    throw new Error("Rounds must be an integer between 1 and 10.");
+  }
+  if (!Number.isInteger(maxHours) || maxHours < 1 || maxHours > 8) {
+    throw new Error("Open hours must be an integer between 1 and 8.");
+  }
+  if (
+    !Number.isInteger(baseRevenuePerHour) ||
+    baseRevenuePerHour < 1 ||
+    baseRevenuePerHour > 50
+  ) {
+    throw new Error("Base revenue per hour must be an integer between 1 and 50.");
+  }
+  if (!Number.isInteger(crowdPenalty) || crowdPenalty < 0 || crowdPenalty > 20) {
+    throw new Error("Crowding penalty must be an integer between 0 and 20.");
+  }
+  if (!Number.isInteger(hourlyCost) || hourlyCost < 0 || hourlyCost > 20) {
+    throw new Error("Hourly running cost must be an integer between 0 and 20.");
+  }
+  if (!Number.isInteger(stallFee) || stallFee < 0 || stallFee > 30) {
+    throw new Error("Stall fee must be an integer between 0 and 30.");
+  }
+
+  return {
+    seatCount,
+    maxRounds,
+    maxHours,
+    baseRevenuePerHour,
+    crowdPenalty,
+    hourlyCost,
+    stallFee,
+  };
+}
+
+function nightMarketRevenuePerHour(
+  entrantCount,
+  settings = nightMarketState.settings
+) {
+  if (entrantCount <= 0) {
+    return 0;
+  }
+  return Math.max(
+    0,
+    settings.baseRevenuePerHour - settings.crowdPenalty * (entrantCount - 1)
+  );
+}
+
+function nightMarketReferenceTable(settings = nightMarketState.settings) {
+  return Array.from({ length: settings.seatCount }, (_, index) => ({
+    entrants: index + 1,
+    revenuePerHour: nightMarketRevenuePerHour(index + 1, settings),
+  }));
+}
+
+function nightMarketRoundSummary(round) {
+  if (!round) {
+    return null;
+  }
+  return {
+    number: round.number,
+    status: round.status,
+    submittedCount: round.submissions.length,
+    entrantsCount: round.status === "closed" ? round.entrantsCount : null,
+    revenuePerHour: round.status === "closed" ? round.revenuePerHour : null,
+    averageHours: round.status === "closed" ? round.averageHours : null,
+    totalOpenHours: round.status === "closed" ? round.totalOpenHours : null,
+  };
+}
+
+function nightMarketRanking() {
+  return nightMarketState.players
+    .filter((player) => player.token)
+    .map((player) => ({
+      seat: player.seat,
+      stall: player.stall,
+      cumulative: player.cumulative,
+      roundsPlayed: player.history.length,
+    }))
+    .sort((a, b) => b.cumulative - a.cumulative || a.seat - b.seat);
+}
+
+function nightMarketBaseState(origin) {
+  return {
+    sessionId: nightMarketState.sessionId,
+    sessionCode: nightMarketState.sessionCode,
+    status: nightMarketState.status,
+    currentRound: nightMarketState.currentRound,
+    settings: nightMarketState.settings,
+    joinedCount: nightMarketState.players.filter((player) => player.token).length,
+    joinUrl: `${origin}/night-market.html?role=student`,
+    teacherUrl: `${origin}/night-market.html?role=teacher`,
+    referenceTable: nightMarketReferenceTable(),
+    players: nightMarketState.players.map((player) => ({
+      seat: player.seat,
+      stall: player.stall,
+      name: player.name,
+      joined: Boolean(player.token),
+      cumulative: player.cumulative,
+    })),
+    currentRoundSummary: nightMarketRoundSummary(getNightMarketRound()),
+    roundHistory: nightMarketState.rounds
+      .filter((round) => round.status === "closed")
+      .map((round) => ({
+        number: round.number,
+        entrantsCount: round.entrantsCount,
+        revenuePerHour: round.revenuePerHour,
+        averageHours: round.averageHours,
+        totalOpenHours: round.totalOpenHours,
+        submittedCount: round.submissions.length,
+      })),
+    ranking: nightMarketRanking(),
+  };
+}
+
+function nightMarketTeacherState(origin) {
+  const round = getNightMarketRound();
+  return {
+    ...nightMarketBaseState(origin),
+    currentRoundSummary: round
+      ? {
+          number: round.number,
+          status: round.status,
+          submittedCount: round.submissions.length,
+          entrantsCount: round.entrantsCount,
+          revenuePerHour: round.revenuePerHour,
+          averageHours: round.averageHours,
+          totalOpenHours: round.totalOpenHours,
+          submissions: round.submissions.map((item) => ({
+            seat: item.seat,
+            enter: item.enter,
+            hours: item.hours,
+          })),
+          resolvedChoices: round.resolvedChoices || [],
+        }
+      : null,
+    players: nightMarketState.players.map((player) => ({
+      seat: player.seat,
+      stall: player.stall,
+      name: player.name,
+      joined: Boolean(player.token),
+      cumulative: player.cumulative,
+      history: player.history,
+    })),
+  };
+}
+
+function resetNightMarketSession() {
+  nightMarketState = freshNightMarketState();
+}
+
+function applyNightMarketRoundResults(round) {
+  const { hourlyCost, stallFee } = nightMarketState.settings;
+  const activePlayers = nightMarketState.players.filter((player) => player.token);
+  const resolvedChoices = activePlayers.map((player) => {
+    const submission = round.submissions.find((item) => item.seat === player.seat);
+    return {
+      seat: player.seat,
+      stall: player.stall,
+      enter: submission ? submission.enter : false,
+      hours: submission && submission.enter ? submission.hours : 0,
+      defaulted: !submission,
+    };
+  });
+
+  round.entrantsCount = resolvedChoices.filter((item) => item.enter).length;
+  round.revenuePerHour = nightMarketRevenuePerHour(round.entrantsCount);
+  round.averageHours = round.entrantsCount
+    ? average(resolvedChoices.filter((item) => item.enter).map((item) => item.hours))
+    : 0;
+  round.totalOpenHours = resolvedChoices.reduce((sum, item) => sum + item.hours, 0);
+  round.resolvedChoices = resolvedChoices.map((item) => {
+    const grossRevenue = item.enter ? round.revenuePerHour * item.hours : 0;
+    const runningCost = item.enter ? hourlyCost * item.hours : 0;
+    const paidStallFee = item.enter ? stallFee : 0;
+    const takeHome = grossRevenue - runningCost - paidStallFee;
+    return {
+      ...item,
+      grossRevenue,
+      runningCost,
+      stallFee: paidStallFee,
+      takeHome,
+    };
+  });
+  round.status = "closed";
+  round.closedAt = new Date().toISOString();
+
+  for (const player of activePlayers) {
+    const choice = round.resolvedChoices.find((item) => item.seat === player.seat);
+    player.cumulative += choice.takeHome;
+    player.history.push({
+      round: round.number,
+      stall: player.stall,
+      entered: choice.enter,
+      openHours: choice.hours,
+      defaulted: choice.defaulted,
+      entrantsCount: round.entrantsCount,
+      revenuePerHour: round.revenuePerHour,
+      grossRevenue: choice.grossRevenue,
+      runningCost: choice.runningCost,
+      stallFee: choice.stallFee,
+      takeHome: choice.takeHome,
+      cumulative: player.cumulative,
+    });
+  }
+
+  if (round.number >= nightMarketState.settings.maxRounds) {
+    nightMarketState.status = "finished";
+  } else {
+    nightMarketState.status = "results";
+  }
+}
+
 function createUltimatumParticipants(count, teacherJoinsIfOdd) {
   const participants = [];
   for (let id = 1; id <= count; id += 1) {
@@ -2083,6 +2361,264 @@ async function handleMilkTeaApi(req, res, url) {
   sendJson(res, 404, { error: "Endpoint not found." });
 }
 
+async function handleNightMarketApi(req, res, url) {
+  const origin = getOrigin(req);
+
+  if (req.method === "GET" && url.pathname === "/api/night-market/meta") {
+    sendJson(res, 200, nightMarketBaseState(origin));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/night-market/teacher/state") {
+    sendJson(res, 200, nightMarketTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/night-market/teacher/reset") {
+    resetNightMarketSession();
+    sendJson(res, 200, nightMarketTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/night-market/teacher/configure") {
+    const body = await getRequestBody(req);
+    if (
+      nightMarketState.currentRound > 0 ||
+      nightMarketState.players.some((player) => player.token)
+    ) {
+      sendJson(res, 409, {
+        error:
+          "Students have already joined or rounds have already started. Reset first before changing settings.",
+      });
+      return;
+    }
+
+    try {
+      const settings = validateNightMarketSettings(body);
+      nightMarketState.settings = settings;
+      nightMarketState.players = createNightMarketPlayers(settings.seatCount);
+      nightMarketState.status = "lobby";
+      sendJson(res, 200, nightMarketTeacherState(origin));
+    } catch (error) {
+      sendJson(res, 400, { error: error.message });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/night-market/teacher/start-round") {
+    if (nightMarketState.status === "collecting") {
+      sendJson(res, 409, { error: "A round is already open." });
+      return;
+    }
+    if (nightMarketState.status === "setup") {
+      sendJson(res, 409, { error: "Configure the session first." });
+      return;
+    }
+    if (nightMarketState.currentRound >= nightMarketState.settings.maxRounds) {
+      sendJson(res, 409, { error: "All rounds are already finished." });
+      return;
+    }
+    if (
+      nightMarketState.players.filter((player) => player.token).length !==
+      nightMarketState.settings.seatCount
+    ) {
+      sendJson(res, 409, {
+        error: "All stalls must join before the teacher can start the round.",
+      });
+      return;
+    }
+
+    nightMarketState.currentRound += 1;
+    nightMarketState.status = "collecting";
+    nightMarketState.rounds.push({
+      number: nightMarketState.currentRound,
+      status: "collecting",
+      entrantsCount: null,
+      revenuePerHour: null,
+      averageHours: null,
+      totalOpenHours: null,
+      submissions: [],
+      resolvedChoices: [],
+      openedAt: new Date().toISOString(),
+      closedAt: null,
+    });
+
+    sendJson(res, 200, nightMarketTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/night-market/teacher/close-round") {
+    const round = getNightMarketRound();
+    if (!round || round.status !== "collecting") {
+      sendJson(res, 409, { error: "There is no open round to close." });
+      return;
+    }
+
+    applyNightMarketRoundResults(round);
+    sendJson(res, 200, nightMarketTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/night-market/student/join") {
+    const body = await getRequestBody(req);
+    const token = typeof body.token === "string" ? body.token : "";
+    const name = typeof body.name === "string" ? body.name.trim().slice(0, 30) : "";
+    const normalized = normalizeName(name);
+
+    if (nightMarketState.status === "setup") {
+      sendJson(res, 409, {
+        error: "The teacher has not saved the night market settings yet.",
+      });
+      return;
+    }
+
+    if (!(nightMarketState.status === "lobby" && nightMarketState.currentRound === 0)) {
+      sendJson(res, 409, {
+        error: "New players can only join before Round 1 starts.",
+      });
+      return;
+    }
+
+    if (!name) {
+      sendJson(res, 400, { error: "Name or alias cannot be empty." });
+      return;
+    }
+
+    const sameNamePlayer = nightMarketState.players.find(
+      (player) => player.token && normalizeName(player.name) === normalized
+    );
+    if (sameNamePlayer && sameNamePlayer.token !== token) {
+      sendJson(res, 200, {
+        token: sameNamePlayer.token,
+        seat: sameNamePlayer.seat,
+        stall: sameNamePlayer.stall,
+        name: sameNamePlayer.name,
+        sessionCode: nightMarketState.sessionCode,
+        rejoined: true,
+      });
+      return;
+    }
+
+    let player = token ? nightMarketPlayerByToken(token) : null;
+    if (!player) {
+      player = nightMarketState.players.find((item) => !item.token) || null;
+    }
+    if (!player) {
+      sendJson(res, 409, { error: "The session is already full." });
+      return;
+    }
+
+    if (!player.token) {
+      player.token = crypto.randomUUID();
+      player.joinedAt = new Date().toISOString();
+    }
+    player.name = name;
+
+    sendJson(res, 200, {
+      token: player.token,
+      seat: player.seat,
+      stall: player.stall,
+      name: player.name,
+      sessionCode: nightMarketState.sessionCode,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/night-market/student/state") {
+    const token = url.searchParams.get("token") || "";
+    const player = nightMarketPlayerByToken(token);
+    if (!player) {
+      sendJson(res, 404, { error: "Student identity not found. Please rejoin." });
+      return;
+    }
+
+    const round = getNightMarketRound();
+    const ownSubmission =
+      round?.submissions.find((item) => item.seat === player.seat) || null;
+    const ownResolved =
+      round?.resolvedChoices.find((item) => item.seat === player.seat) || null;
+
+    sendJson(res, 200, {
+      ...nightMarketBaseState(origin),
+      player: {
+        seat: player.seat,
+        stall: player.stall,
+        name: player.name,
+        cumulative: player.cumulative,
+        history: player.history,
+      },
+      currentRoundSummary: round
+        ? {
+            number: round.number,
+            status: round.status,
+            submitted: Boolean(ownSubmission),
+            ownEnter: ownSubmission ? ownSubmission.enter : null,
+            ownHours: ownSubmission ? ownSubmission.hours : null,
+            entrantsCount: round.status === "closed" ? round.entrantsCount : null,
+            revenuePerHour: round.status === "closed" ? round.revenuePerHour : null,
+            averageHours: round.status === "closed" ? round.averageHours : null,
+            grossRevenue: ownResolved ? ownResolved.grossRevenue : null,
+            runningCost: ownResolved ? ownResolved.runningCost : null,
+            stallFee: ownResolved ? ownResolved.stallFee : null,
+            takeHome: ownResolved ? ownResolved.takeHome : null,
+            defaulted: ownResolved ? ownResolved.defaulted : false,
+          }
+        : null,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/night-market/student/submit-choice") {
+    const body = await getRequestBody(req);
+    const token = typeof body.token === "string" ? body.token : "";
+    const enter = body.enter === true || body.enter === "true";
+    const hours = Number(body.hours);
+    const player = nightMarketPlayerByToken(token);
+    const round = getNightMarketRound();
+
+    if (!player) {
+      sendJson(res, 404, { error: "Student identity not found. Please rejoin." });
+      return;
+    }
+    if (!round || round.status !== "collecting") {
+      sendJson(res, 409, { error: "The round is not open for choices." });
+      return;
+    }
+
+    const existing = round.submissions.find((item) => item.seat === player.seat);
+    if (existing) {
+      sendJson(res, 409, { error: "You have already submitted this round." });
+      return;
+    }
+
+    let normalizedHours = 0;
+    if (enter) {
+      if (
+        !Number.isInteger(hours) ||
+        hours < 1 ||
+        hours > nightMarketState.settings.maxHours
+      ) {
+        sendJson(res, 400, {
+          error: `Open hours must be an integer between 1 and ${nightMarketState.settings.maxHours}.`,
+        });
+        return;
+      }
+      normalizedHours = hours;
+    }
+
+    round.submissions.push({
+      seat: player.seat,
+      enter,
+      hours: normalizedHours,
+      submittedAt: new Date().toISOString(),
+    });
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  sendJson(res, 404, { error: "Endpoint not found." });
+}
+
 async function handlePublicGoodsApi(req, res, url) {
   const origin = getOrigin(req);
 
@@ -2712,6 +3248,10 @@ async function handleApi(req, res, url) {
   }
   if (url.pathname.startsWith("/api/milk-tea/")) {
     await handleMilkTeaApi(req, res, url);
+    return;
+  }
+  if (url.pathname.startsWith("/api/night-market/")) {
+    await handleNightMarketApi(req, res, url);
     return;
   }
   await handlePublicGoodsApi(req, res, url);
