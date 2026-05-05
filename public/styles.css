@@ -394,6 +394,20 @@ select {
   margin-bottom: 0;
 }
 
+.signal-card {
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.signal-calm {
+  background: linear-gradient(135deg, #eef8f3, #f8fbf4);
+  border-color: rgba(13, 122, 107, 0.18);
+}
+
+.signal-warning {
+  background: linear-gradient(135deg, #fff4ea, #fff9f2);
+  border-color: rgba(180, 83, 9, 0.22);
+}
+
 .speed-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));

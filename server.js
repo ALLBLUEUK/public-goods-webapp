@@ -807,6 +807,329 @@ function applyNightMarketRoundResults(round) {
   }
 }
 
+function createBankRunPlayers(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    seat: index + 1,
+    name: "",
+    token: "",
+    joinedAt: "",
+    signal: "",
+    status: "waiting",
+    resolvedDay: null,
+    cumulative: 0,
+    history: [],
+  }));
+}
+
+function drawBankRunRumorState() {
+  return Math.random() < 0.5 ? "calm" : "nervous";
+}
+
+function freshBankRunState() {
+  const defaults = {
+    seatCount: 6,
+    daysUntilMaturity: 3,
+    depositAmount: 100,
+    maturityPayout: 150,
+    liquiditySlots: 3,
+    rumorAccuracy: 75,
+  };
+
+  return {
+    sessionId: crypto.randomUUID(),
+    sessionCode: randomCode(),
+    status: "setup",
+    currentDay: 0,
+    createdAt: new Date().toISOString(),
+    settings: defaults,
+    rumorState: drawBankRunRumorState(),
+    bankOutcome: "pending",
+    successfulWithdrawals: 0,
+    players: createBankRunPlayers(defaults.seatCount),
+    days: [],
+  };
+}
+
+let bankRunState = freshBankRunState();
+
+function getBankRunDay() {
+  return bankRunState.days[bankRunState.currentDay - 1] || null;
+}
+
+function bankRunPlayerByToken(token) {
+  return bankRunState.players.find((player) => player.token === token) || null;
+}
+
+function bankRunActivePlayers() {
+  return bankRunState.players.filter(
+    (player) => player.token && player.status === "waiting"
+  );
+}
+
+function bankRunRemainingLiquidity() {
+  return Math.max(0, bankRunState.settings.liquiditySlots - bankRunState.successfulWithdrawals);
+}
+
+function drawBankRunSignal() {
+  const accurate = Math.random() < bankRunState.settings.rumorAccuracy / 100;
+  if (bankRunState.rumorState === "calm") {
+    return accurate ? "calm" : "warning";
+  }
+  return accurate ? "warning" : "calm";
+}
+
+function validateBankRunSettings(settings) {
+  const seatCount = Number(settings.seatCount);
+  const daysUntilMaturity = Number(settings.daysUntilMaturity);
+  const depositAmount = Number(settings.depositAmount);
+  const maturityPayout = Number(settings.maturityPayout);
+  const liquiditySlots = Number(settings.liquiditySlots);
+  const rumorAccuracy = Number(settings.rumorAccuracy);
+
+  if (!Number.isInteger(seatCount) || seatCount < 2 || seatCount > 6) {
+    throw new Error("Players must be an integer between 2 and 6.");
+  }
+  if (!Number.isInteger(daysUntilMaturity) || daysUntilMaturity < 2 || daysUntilMaturity > 6) {
+    throw new Error("Days until maturity must be an integer between 2 and 6.");
+  }
+  if (!Number.isInteger(depositAmount) || depositAmount < 10 || depositAmount > 1000) {
+    throw new Error("Deposit amount must be an integer between 10 and 1000.");
+  }
+  if (
+    !Number.isInteger(maturityPayout) ||
+    maturityPayout <= depositAmount ||
+    maturityPayout > 2000
+  ) {
+    throw new Error("Maturity payout must be an integer greater than the deposit and at most 2000.");
+  }
+  if (
+    !Number.isInteger(liquiditySlots) ||
+    liquiditySlots < 1 ||
+    liquiditySlots >= seatCount
+  ) {
+    throw new Error("Early cash slots must be at least 1 and smaller than the number of players.");
+  }
+  if (!Number.isInteger(rumorAccuracy) || rumorAccuracy < 55 || rumorAccuracy > 95) {
+    throw new Error("Rumor accuracy must be an integer between 55 and 95.");
+  }
+
+  return {
+    seatCount,
+    daysUntilMaturity,
+    depositAmount,
+    maturityPayout,
+    liquiditySlots,
+    rumorAccuracy,
+  };
+}
+
+function bankRunDaySummary(day) {
+  if (!day) {
+    return null;
+  }
+  return {
+    number: day.number,
+    status: day.status,
+    submittedCount: day.submissions.length,
+    attemptedWithdrawals: day.status === "closed" ? day.attemptedWithdrawals : null,
+    successfulToday: day.status === "closed" ? day.successfulToday : null,
+    defaultWaitCount: day.status === "closed" ? day.defaultWaitCount : null,
+    remainingLiquidityBefore: day.status === "closed" ? day.remainingLiquidityBefore : null,
+    remainingLiquidityAfter: day.status === "closed" ? day.remainingLiquidityAfter : null,
+    bankCollapsedToday: day.status === "closed" ? day.bankCollapsedToday : false,
+  };
+}
+
+function bankRunRanking() {
+  return bankRunState.players
+    .filter((player) => player.token)
+    .map((player) => ({
+      seat: player.seat,
+      cumulative: player.cumulative,
+      status: player.status,
+    }))
+    .sort((a, b) => b.cumulative - a.cumulative || a.seat - b.seat);
+}
+
+function bankRunBaseState(origin) {
+  return {
+    sessionId: bankRunState.sessionId,
+    sessionCode: bankRunState.sessionCode,
+    status: bankRunState.status,
+    currentDay: bankRunState.currentDay,
+    settings: bankRunState.settings,
+    bankOutcome: bankRunState.bankOutcome,
+    successfulWithdrawals: bankRunState.successfulWithdrawals,
+    remainingLiquidity: bankRunRemainingLiquidity(),
+    joinedCount: bankRunState.players.filter((player) => player.token).length,
+    activeCount: bankRunActivePlayers().length,
+    joinUrl: `${origin}/bank-run.html?role=student`,
+    teacherUrl: `${origin}/bank-run.html?role=teacher`,
+    rumorStateReveal:
+      bankRunState.status === "finished" || bankRunState.status === "failed"
+        ? bankRunState.rumorState
+        : null,
+    players: bankRunState.players.map((player) => ({
+      seat: player.seat,
+      name: player.name,
+      joined: Boolean(player.token),
+      signal: player.signal,
+      status: player.status,
+      resolvedDay: player.resolvedDay,
+      cumulative: player.cumulative,
+    })),
+    currentDaySummary: bankRunDaySummary(getBankRunDay()),
+    dayHistory: bankRunState.days
+      .filter((day) => day.status === "closed")
+      .map((day) => ({
+        number: day.number,
+        attemptedWithdrawals: day.attemptedWithdrawals,
+        successfulToday: day.successfulToday,
+        defaultWaitCount: day.defaultWaitCount,
+        remainingLiquidityAfter: day.remainingLiquidityAfter,
+        bankCollapsedToday: day.bankCollapsedToday,
+      })),
+    ranking: bankRunRanking(),
+  };
+}
+
+function bankRunTeacherState(origin) {
+  const day = getBankRunDay();
+  return {
+    ...bankRunBaseState(origin),
+    currentDaySummary: day
+      ? {
+          number: day.number,
+          status: day.status,
+          submittedCount: day.submissions.length,
+          attemptedWithdrawals: day.attemptedWithdrawals,
+          successfulToday: day.successfulToday,
+          defaultWaitCount: day.defaultWaitCount,
+          remainingLiquidityBefore: day.remainingLiquidityBefore,
+          remainingLiquidityAfter: day.remainingLiquidityAfter,
+          bankCollapsedToday: day.bankCollapsedToday,
+          submissions: day.submissions.map((item) => ({
+            seat: item.seat,
+            action: item.action,
+          })),
+          resolvedChoices: day.resolvedChoices || [],
+        }
+      : null,
+    players: bankRunState.players.map((player) => ({
+      seat: player.seat,
+      name: player.name,
+      joined: Boolean(player.token),
+      signal: player.signal,
+      status: player.status,
+      resolvedDay: player.resolvedDay,
+      cumulative: player.cumulative,
+      history: player.history,
+    })),
+  };
+}
+
+function resetBankRunSession() {
+  bankRunState = freshBankRunState();
+}
+
+function applyBankRunDayResults(day) {
+  const { depositAmount, maturityPayout } = bankRunState.settings;
+  const activePlayers = bankRunActivePlayers();
+  const resolvedChoices = activePlayers.map((player) => {
+    const submission = day.submissions.find((item) => item.seat === player.seat);
+    return {
+      seat: player.seat,
+      action: submission ? submission.action : "wait",
+      defaulted: !submission,
+      queueRank: null,
+      payoff: 0,
+      outcome: "wait",
+    };
+  });
+
+  const withdrawers = shuffle(
+    resolvedChoices
+      .filter((item) => item.action === "withdraw")
+      .map((item) => item.seat)
+  );
+  const remainingLiquidityBefore = bankRunRemainingLiquidity();
+  const successfulToday = Math.min(remainingLiquidityBefore, withdrawers.length);
+  const successfulSeats = new Set(withdrawers.slice(0, successfulToday));
+
+  day.remainingLiquidityBefore = remainingLiquidityBefore;
+  day.attemptedWithdrawals = withdrawers.length;
+  day.successfulToday = successfulToday;
+  day.defaultWaitCount = resolvedChoices.filter((item) => item.defaulted).length;
+  day.bankCollapsedToday = withdrawers.length > remainingLiquidityBefore;
+
+  for (const [index, seat] of withdrawers.entries()) {
+    const choice = resolvedChoices.find((item) => item.seat === seat);
+    choice.queueRank = index + 1;
+  }
+
+  for (const choice of resolvedChoices) {
+    if (choice.action === "withdraw" && successfulSeats.has(choice.seat)) {
+      choice.outcome = "withdrew";
+      choice.payoff = depositAmount;
+    } else if (choice.action === "withdraw" && day.bankCollapsedToday) {
+      choice.outcome = "too_late";
+      choice.payoff = 0;
+    } else if (day.bankCollapsedToday) {
+      choice.outcome = "lost";
+      choice.payoff = 0;
+    } else if (day.number >= bankRunState.settings.daysUntilMaturity) {
+      choice.outcome = "maturity";
+      choice.payoff = maturityPayout;
+    } else {
+      choice.outcome = "wait";
+      choice.payoff = 0;
+    }
+  }
+
+  day.resolvedChoices = resolvedChoices;
+  day.status = "closed";
+  day.closedAt = new Date().toISOString();
+
+  bankRunState.successfulWithdrawals += successfulToday;
+  day.remainingLiquidityAfter = bankRunRemainingLiquidity();
+
+  for (const player of activePlayers) {
+    const choice = resolvedChoices.find((item) => item.seat === player.seat);
+    player.cumulative += choice.payoff;
+    player.history.push({
+      day: day.number,
+      action: choice.action,
+      defaulted: choice.defaulted,
+      queueRank: choice.queueRank,
+      outcome: choice.outcome,
+      payoff: choice.payoff,
+      cumulative: player.cumulative,
+      signal: player.signal,
+    });
+
+    if (choice.outcome === "withdrew") {
+      player.status = "withdrew";
+      player.resolvedDay = day.number;
+    } else if (choice.outcome === "maturity") {
+      player.status = "matured";
+      player.resolvedDay = day.number;
+    } else if (choice.outcome === "too_late" || choice.outcome === "lost") {
+      player.status = "lost";
+      player.resolvedDay = day.number;
+    }
+  }
+
+  if (day.bankCollapsedToday) {
+    bankRunState.status = "failed";
+    bankRunState.bankOutcome = "collapsed";
+  } else if (day.number >= bankRunState.settings.daysUntilMaturity) {
+    bankRunState.status = "finished";
+    bankRunState.bankOutcome = "matured";
+  } else {
+    bankRunState.status = "results";
+  }
+}
+
 function createUltimatumParticipants(count, teacherJoinsIfOdd) {
   const participants = [];
   for (let id = 1; id <= count; id += 1) {
@@ -2861,6 +3184,269 @@ async function handlePublicGoodsApi(req, res, url) {
   sendJson(res, 404, { error: "Endpoint not found." });
 }
 
+async function handleBankRunApi(req, res, url) {
+  const origin = getOrigin(req);
+
+  if (req.method === "GET" && url.pathname === "/api/bank-run/meta") {
+    sendJson(res, 200, bankRunBaseState(origin));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/bank-run/teacher/state") {
+    sendJson(res, 200, bankRunTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/bank-run/teacher/reset") {
+    resetBankRunSession();
+    sendJson(res, 200, bankRunTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/bank-run/teacher/configure") {
+    const body = await getRequestBody(req);
+    if (bankRunState.currentDay > 0 || bankRunState.players.some((player) => player.token)) {
+      sendJson(res, 409, {
+        error:
+          "Students have already joined or the game has already started. Reset first before changing settings.",
+      });
+      return;
+    }
+
+    try {
+      const settings = validateBankRunSettings(body);
+      bankRunState.settings = settings;
+      bankRunState.players = createBankRunPlayers(settings.seatCount);
+      bankRunState.currentDay = 0;
+      bankRunState.days = [];
+      bankRunState.successfulWithdrawals = 0;
+      bankRunState.bankOutcome = "pending";
+      bankRunState.rumorState = drawBankRunRumorState();
+      bankRunState.status = "lobby";
+      sendJson(res, 200, bankRunTeacherState(origin));
+    } catch (error) {
+      sendJson(res, 400, { error: error.message });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/bank-run/teacher/start-day") {
+    if (bankRunState.status === "collecting") {
+      sendJson(res, 409, { error: "A day is already open." });
+      return;
+    }
+    if (bankRunState.status === "setup") {
+      sendJson(res, 409, { error: "Configure the session first." });
+      return;
+    }
+    if (bankRunState.status === "finished" || bankRunState.status === "failed") {
+      sendJson(res, 409, { error: "This game is already over." });
+      return;
+    }
+    if (bankRunState.currentDay >= bankRunState.settings.daysUntilMaturity) {
+      sendJson(res, 409, { error: "All days are already finished." });
+      return;
+    }
+    if (
+      bankRunState.players.filter((player) => player.token).length !==
+      bankRunState.settings.seatCount
+    ) {
+      sendJson(res, 409, {
+        error: "All depositors must join before the teacher can start the day.",
+      });
+      return;
+    }
+
+    bankRunState.currentDay += 1;
+    bankRunState.status = "collecting";
+    bankRunState.days.push({
+      number: bankRunState.currentDay,
+      status: "collecting",
+      submissions: [],
+      resolvedChoices: [],
+      attemptedWithdrawals: null,
+      successfulToday: null,
+      defaultWaitCount: null,
+      remainingLiquidityBefore: null,
+      remainingLiquidityAfter: null,
+      bankCollapsedToday: false,
+      openedAt: new Date().toISOString(),
+      closedAt: null,
+    });
+
+    sendJson(res, 200, bankRunTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/bank-run/teacher/close-day") {
+    const day = getBankRunDay();
+    if (!day || day.status !== "collecting") {
+      sendJson(res, 409, { error: "There is no open day to close." });
+      return;
+    }
+
+    applyBankRunDayResults(day);
+    sendJson(res, 200, bankRunTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/bank-run/student/join") {
+    const body = await getRequestBody(req);
+    const token = typeof body.token === "string" ? body.token : "";
+    const name = typeof body.name === "string" ? body.name.trim().slice(0, 30) : "";
+    const normalized = normalizeName(name);
+
+    if (bankRunState.status === "setup") {
+      sendJson(res, 409, {
+        error: "The teacher has not saved the bank run settings yet.",
+      });
+      return;
+    }
+
+    if (!(bankRunState.status === "lobby" && bankRunState.currentDay === 0)) {
+      sendJson(res, 409, {
+        error: "New players can only join before Day 1 starts.",
+      });
+      return;
+    }
+
+    if (!name) {
+      sendJson(res, 400, { error: "Name or alias cannot be empty." });
+      return;
+    }
+
+    const sameNamePlayer = bankRunState.players.find(
+      (player) => player.token && normalizeName(player.name) === normalized
+    );
+    if (sameNamePlayer && sameNamePlayer.token !== token) {
+      sendJson(res, 200, {
+        token: sameNamePlayer.token,
+        seat: sameNamePlayer.seat,
+        signal: sameNamePlayer.signal,
+        name: sameNamePlayer.name,
+        sessionCode: bankRunState.sessionCode,
+        rejoined: true,
+      });
+      return;
+    }
+
+    let player = token ? bankRunPlayerByToken(token) : null;
+    if (!player) {
+      player = bankRunState.players.find((item) => !item.token) || null;
+    }
+    if (!player) {
+      sendJson(res, 409, { error: "The session is already full." });
+      return;
+    }
+
+    if (!player.token) {
+      player.token = crypto.randomUUID();
+      player.joinedAt = new Date().toISOString();
+    }
+    if (!player.signal) {
+      player.signal = drawBankRunSignal();
+    }
+    player.name = name;
+
+    sendJson(res, 200, {
+      token: player.token,
+      seat: player.seat,
+      signal: player.signal,
+      name: player.name,
+      sessionCode: bankRunState.sessionCode,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/bank-run/student/state") {
+    const token = url.searchParams.get("token") || "";
+    const player = bankRunPlayerByToken(token);
+    if (!player) {
+      sendJson(res, 404, { error: "Student identity not found. Please rejoin." });
+      return;
+    }
+
+    const day = getBankRunDay();
+    const ownSubmission = day?.submissions.find((item) => item.seat === player.seat) || null;
+    const ownResolved = day?.resolvedChoices.find((item) => item.seat === player.seat) || null;
+
+    sendJson(res, 200, {
+      ...bankRunBaseState(origin),
+      history: player.history,
+      player: {
+        seat: player.seat,
+        name: player.name,
+        signal: player.signal,
+        status: player.status,
+        resolvedDay: player.resolvedDay,
+        cumulative: player.cumulative,
+        history: player.history,
+      },
+      currentDaySummary: day
+        ? {
+            number: day.number,
+            status: day.status,
+            submitted: Boolean(ownSubmission),
+            ownAction: ownSubmission
+              ? ownSubmission.action
+              : ownResolved
+                ? ownResolved.action
+                : null,
+            ownOutcome: ownResolved ? ownResolved.outcome : null,
+            ownPayoff: ownResolved ? ownResolved.payoff : null,
+            queueRank: ownResolved ? ownResolved.queueRank : null,
+            attemptedWithdrawals: day.status === "closed" ? day.attemptedWithdrawals : null,
+            successfulToday: day.status === "closed" ? day.successfulToday : null,
+            bankCollapsedToday: day.status === "closed" ? day.bankCollapsedToday : false,
+          }
+        : null,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/bank-run/student/submit-choice") {
+    const body = await getRequestBody(req);
+    const token = typeof body.token === "string" ? body.token : "";
+    const action = typeof body.action === "string" ? body.action : "";
+    const player = bankRunPlayerByToken(token);
+    const day = getBankRunDay();
+
+    if (!player) {
+      sendJson(res, 404, { error: "Student identity not found. Please rejoin." });
+      return;
+    }
+    if (player.status !== "waiting") {
+      sendJson(res, 409, { error: "You are no longer active in this game." });
+      return;
+    }
+    if (!day || day.status !== "collecting") {
+      sendJson(res, 409, { error: "Today is not open for choices." });
+      return;
+    }
+    if (!["wait", "withdraw"].includes(action)) {
+      sendJson(res, 400, { error: "Choice must be either 'wait' or 'withdraw'." });
+      return;
+    }
+
+    const existing = day.submissions.find((item) => item.seat === player.seat);
+    if (existing) {
+      sendJson(res, 409, { error: "You have already submitted today." });
+      return;
+    }
+
+    day.submissions.push({
+      seat: player.seat,
+      action,
+      submittedAt: new Date().toISOString(),
+    });
+
+    sendJson(res, 200, { ok: true, submittedCount: day.submissions.length });
+    return;
+  }
+
+  sendJson(res, 404, { error: "Endpoint not found." });
+}
+
 async function handleUltimatumApi(req, res, url) {
   const origin = getOrigin(req);
 
@@ -3252,6 +3838,10 @@ async function handleApi(req, res, url) {
   }
   if (url.pathname.startsWith("/api/night-market/")) {
     await handleNightMarketApi(req, res, url);
+    return;
+  }
+  if (url.pathname.startsWith("/api/bank-run/")) {
+    await handleBankRunApi(req, res, url);
     return;
   }
   await handlePublicGoodsApi(req, res, url);

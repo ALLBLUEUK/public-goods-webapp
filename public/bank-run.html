@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Campus Bank Rumor</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero" id="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Campus Bank Rumor</p>
+          <h1>校园银行传言 Campus Bank Rumor</h1>
+          <p class="lead">
+            你们 6 个人都把钱存在同一家校园银行里。如果银行撑到最后一天，留在里面的人可以拿到更高回报。
+            <br />
+            All six of you deposited money in the same campus bank. If the bank survives to the last day, those who stay earn the higher return.
+          </p>
+          <p class="lead">
+            但每个人都会私下听到一条传言。真正难的不是算术，而是猜别人会不会因为传言先跑去取钱。
+            <br />
+            But each player privately hears a rumor. The real challenge is not arithmetic. It is guessing whether other people will panic and run first.
+          </p>
+        </div>
+        <div class="hero-actions" id="heroActions">
+          <a class="button" href="/bank-run.html?role=teacher">教师端 Teacher</a>
+          <a class="button button-secondary" href="/bank-run.html?role=student">学生端 Student</a>
+          <a class="button button-secondary" href="/">返回首页 Home</a>
+        </div>
+      </section>
+
+      <section class="hidden" id="teacherPanel">
+        <header class="page-head">
+          <div>
+            <p class="eyebrow">Teacher Console</p>
+            <h2>教师端 Teacher</h2>
+          </div>
+          <div class="status-row">
+            <span class="pill" id="teacherStatus">Loading</span>
+            <span class="pill" id="teacherSessionCode">Session --</span>
+          </div>
+        </header>
+
+        <article class="card teacher-setup-bar">
+          <div class="split-head">
+            <div>
+              <h3>课堂设置 Classroom Setup</h3>
+              <p class="muted">
+                建议直接用默认参数。这个版本固定强调“私有传言 + 先到先得 + 自我实现挤兑”。
+                <br />
+                The default setup is recommended. This version emphasizes private rumors, first-come-first-served liquidity, and self-fulfilling runs.
+              </p>
+            </div>
+          </div>
+          <form id="configForm" class="config-grid">
+            <label>
+              <span>人数 Players</span>
+              <input id="seatCountInput" type="number" min="2" max="6" value="6" />
+            </label>
+            <label>
+              <span>到期天数 Days Until Maturity</span>
+              <input id="daysInput" type="number" min="2" max="6" value="3" />
+            </label>
+            <label>
+              <span>存款本金 Deposit Amount</span>
+              <input id="depositInput" type="number" min="10" max="1000" value="100" />
+            </label>
+            <label>
+              <span>最后一天到账 Maturity Payout</span>
+              <input id="maturityInput" type="number" min="20" max="2000" value="150" />
+            </label>
+            <label>
+              <span>可提前兑付人数 Early Cash Slots</span>
+              <input id="liquidityInput" type="number" min="1" max="5" value="3" />
+            </label>
+            <label>
+              <span>传言准确率 Rumor Accuracy (%)</span>
+              <input id="accuracyInput" type="number" min="55" max="95" value="75" />
+            </label>
+            <button class="button" type="submit">保存设置 Save Settings</button>
+          </form>
+        </article>
+
+        <section class="teacher-layout">
+          <article class="card rules-card">
+            <h3>投屏规则 Rules for Projection</h3>
+            <div id="teacherRules" class="rules-text"></div>
+          </article>
+
+          <article class="card control-card">
+            <h3>课堂控制 Live Control</h3>
+            <div class="button-stack">
+              <button class="button" id="startDayButton">开始下一天 Start Next Day</button>
+              <button class="button button-secondary" id="closeDayButton">结束今天 Close Day</button>
+              <button class="button button-danger" id="resetButton">重置整场 Reset</button>
+            </div>
+            <div class="kpi-grid">
+              <div class="kpi-box">
+                <span class="kpi-label">当前天数 Current Day</span>
+                <strong id="currentDayValue">0</strong>
+              </div>
+              <div class="kpi-box">
+                <span class="kpi-label">计划天数 Planned Days</span>
+                <strong id="plannedDaysValue">0</strong>
+              </div>
+              <div class="kpi-box">
+                <span class="kpi-label">已加入 Joined</span>
+                <strong id="joinedCountValue">0</strong>
+              </div>
+              <div class="kpi-box">
+                <span class="kpi-label">已提交 Submitted</span>
+                <strong id="submittedCountValue">0</strong>
+              </div>
+              <div class="kpi-box accent-box">
+                <span class="kpi-label">已成功提前取款 Paid Early</span>
+                <strong id="successfulWithdrawalsValue">0</strong>
+              </div>
+              <div class="kpi-box accent-box">
+                <span class="kpi-label">剩余提前兑付名额 Remaining Slots</span>
+                <strong id="remainingLiquidityValue">0</strong>
+              </div>
+              <div class="kpi-box accent-box">
+                <span class="kpi-label">银行结果 Bank Outcome</span>
+                <strong id="bankOutcomeValue">Pending</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="card result-card">
+            <h3>今天结果 Day Result</h3>
+            <div id="dayResultText" class="result-text">No day has been closed yet.</div>
+          </article>
+
+          <article class="card join-card">
+            <h3>学生入口 Student Entry</h3>
+            <div class="link-box" id="joinUrl">Loading</div>
+            <img class="qr" id="qrImage" alt="Join QR code" />
+            <p class="tiny muted">
+              建议投屏老师端，学生扫码进入自己的存款人页面。
+              <br />
+              It is best to project the teacher view while students scan to open their own depositor pages.
+            </p>
+          </article>
+
+          <article class="card">
+            <h3>存款人状态 Depositors</h3>
+            <div id="seatBoard" class="seat-board"></div>
+          </article>
+
+          <article class="card">
+            <h3>最终到账 Ranking</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>排名 Rank</th>
+                  <th id="rankingNameHeader" class="hidden">名字 Name</th>
+                  <th>座位 Seat</th>
+                  <th id="rankingSignalHeader" class="hidden">传言 Rumor</th>
+                  <th>到账 Total</th>
+                </tr>
+              </thead>
+              <tbody id="rankingTable"></tbody>
+            </table>
+          </article>
+
+          <article class="card card-span">
+            <h3>当日明细 Day Detail</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>座位 Seat</th>
+                  <th>动作 Choice</th>
+                  <th>排队顺序 Queue</th>
+                  <th>结果 Outcome</th>
+                  <th>本日到账 Payoff</th>
+                </tr>
+              </thead>
+              <tbody id="dayDetailTable"></tbody>
+            </table>
+          </article>
+
+          <article class="card card-span">
+            <h3>天数记录 Day History</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>第几天 Day</th>
+                  <th>尝试提前取款 Tried to Withdraw</th>
+                  <th>成功取款 Paid Early</th>
+                  <th>剩余名额 Remaining Slots</th>
+                  <th>默认等待 Default Waits</th>
+                  <th>结果 Outcome</th>
+                </tr>
+              </thead>
+              <tbody id="historyTable"></tbody>
+            </table>
+          </article>
+        </section>
+      </section>
+
+      <section class="hidden" id="studentPanel">
+        <header class="page-head">
+          <div>
+            <p class="eyebrow">Student View</p>
+            <h2>学生端 Student</h2>
+          </div>
+          <div class="status-row">
+            <span class="pill" id="studentStatus">Loading</span>
+            <span class="pill" id="studentSeatBadge">Seat --</span>
+          </div>
+        </header>
+
+        <section class="student-layout">
+          <article class="card" id="joinCard">
+            <h3>进入课堂 Join the Session</h3>
+            <p class="muted">
+              输入你的名字或代号。加入后系统会分配你的座位，并私下给你一条传言。
+              <br />
+              Enter your name or alias. After joining, the system assigns your seat and gives you one private rumor.
+            </p>
+            <form id="joinForm" class="config-grid">
+              <label>
+                <span>名字或代号 Name / Alias</span>
+                <input id="nameInput" maxlength="30" placeholder="例如 Example: A / Team 1" />
+              </label>
+              <button class="button" type="submit">进入 Join</button>
+            </form>
+            <p class="tiny muted" id="joinTip">The teacher must save the settings before students can join.</p>
+          </article>
+
+          <article class="card">
+            <h3>学生规则 Student Rules</h3>
+            <div id="studentRules" class="rules-text"></div>
+          </article>
+
+          <div id="studentWorkspace" class="hidden student-grid">
+            <article class="card">
+              <h3>你的决定 Your Decision</h3>
+              <p class="muted" id="studentInstruction">Waiting for the teacher to start Day 1.</p>
+              <div class="callout signal-card" id="signalCard">
+                <strong id="studentSignalTitle">你的私有传言 / Your private rumor</strong>
+                <p class="muted" id="studentSignalText">--</p>
+              </div>
+              <p class="muted" id="studentPositionText">--</p>
+              <form id="submitForm">
+                <input id="choiceInput" type="hidden" value="wait" />
+                <div class="choice-grid">
+                  <button class="choice-button" type="button" data-choice="wait">
+                    <strong>继续存</strong>
+                    <span>Wait / Hold the deposit</span>
+                  </button>
+                  <button class="choice-button" type="button" data-choice="withdraw">
+                    <strong>现在取</strong>
+                    <span>Withdraw Now / Run to the bank</span>
+                  </button>
+                </div>
+                <div class="button-stack">
+                  <button class="button" type="submit">提交今天决定 Submit Today's Choice</button>
+                </div>
+              </form>
+            </article>
+
+            <article class="card">
+              <h3>你的状态 Your Status</h3>
+              <div id="studentSummaryText" class="result-text">Waiting for the first day.</div>
+            </article>
+
+            <article class="card">
+              <h3>个人记录 Your History</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>第几天 Day</th>
+                    <th>动作 Choice</th>
+                    <th>结果 Outcome</th>
+                    <th>到账 Payoff</th>
+                    <th>累计 Total</th>
+                  </tr>
+                </thead>
+                <tbody id="studentHistory"></tbody>
+              </table>
+            </article>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/bank-run.js" defer></script>
+  </body>
+</html>
