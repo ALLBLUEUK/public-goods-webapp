@@ -29,12 +29,22 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function bankTypeLabel(value) {
+  return (
+    {
+      good: "健康银行 / Good Bank",
+      bad: "问题银行 / Bad Bank",
+    }[value] || value
+  );
+}
+
 function bankOutcomeLabel(value) {
   return (
     {
       pending: "等待中 / Pending",
-      matured: "撑到最后 / Survived",
-      collapsed: "中途倒闭 / Collapsed",
+      good_matured: "撑到最后，原来是健康银行 / Survived as Good Bank",
+      bad_matured: "撑到最后，原来是问题银行 / Survived as Bad Bank",
+      collapsed: "中途挤兑倒闭 / Collapsed in a Run",
     }[value] || value
   );
 }
@@ -42,19 +52,11 @@ function bankOutcomeLabel(value) {
 function playerStatusLabel(value) {
   return (
     {
-      waiting: "还在银行里 / Still Waiting",
-      withdrew: "已提前取出 / Withdrew Early",
-      matured: "坚持到最后 / Paid at Maturity",
-      lost: "没来得及取出 / Lost in Collapse",
-    }[value] || value
-  );
-}
-
-function dayStatusLabel(value) {
-  return (
-    {
-      collecting: "当天进行中 / Day Open",
-      closed: "当天已结束 / Day Closed",
+      waiting: "还在银行里 / Still waiting",
+      withdrew: "已提前取出 / Withdrew early",
+      matured_good: "等到最后，拿到高支付 / Reached maturity at high payout",
+      matured_bad: "等到最后，但只拿到低支付 / Reached maturity at low payout",
+      lost: "没来得及取出 / Lost in collapse",
     }[value] || value
   );
 }
@@ -68,29 +70,30 @@ function actionLabel(value) {
 function outcomeLabel(value) {
   return (
     {
-      withdrew: "提前取到 100 / Secured 100",
-      maturity: "等到最后拿到高回报 / Paid at maturity",
+      withdrew: "提前取到本金 / Secured early withdrawal",
+      good_maturity: "等到最后，银行是健康的 / Reached maturity in a good bank",
+      bad_maturity: "等到最后，但银行是问题银行 / Reached maturity in a bad bank",
       wait: "继续留在银行里 / Stayed in the bank",
-      too_late: "冲去取但没赶上 / Too late in the queue",
+      too_late: "冲去取，但排队太晚 / Too late in the queue",
       lost: "继续等，结果银行倒了 / Waited and lost",
     }[value] || value
   );
 }
 
 function signalCopy(signal) {
-  if (signal === "warning") {
+  if (signal === "bad") {
     return {
-      title: "偏坏的传言 / Warning rumor",
+      title: "坏消息 / Bad-bank signal",
       text:
-        "你私下听说：校园里有人开始担心这家银行，可能会有人提前去取钱。这条传言不一定是真的，但如果很多人听到类似消息，挤兑风险会上升。 / You privately heard that some people on campus are getting nervous about the bank and may rush to withdraw early. The rumor may be wrong, but if many people hear something similar, the run risk rises.",
+        "你私下听说：这家银行投出去的项目可能有问题。如果最后证明这条消息是真的，即使银行撑到最后，留下的人也只会拿到较低支付。与此同时，如果很多人也听到类似坏消息，挤兑风险会明显上升。 / You privately heard that the bank's investment may be weak. If this signal is correct, even surviving to the final day yields the lower payout. At the same time, if many people hear a similar bad signal, the run risk rises sharply.",
       toneClass: "signal-warning",
     };
   }
 
   return {
-    title: "偏稳的传言 / Reassuring rumor",
+    title: "好消息 / Good-bank signal",
     text:
-      "你私下听说：校园里目前比较平静，这家银行大概率能撑到最后一天。这条传言不一定完全准确，但它意味着别人也许不会那么快去挤兑。 / You privately heard that campus mood is fairly calm and the bank will probably make it to the last day. The rumor may be imperfect, but it suggests other people may be less likely to panic immediately.",
+      "你私下听说：这家银行的项目看起来比较健康。如果最后证明这条消息是真的，等到最后一天的人会拿到较高支付。但你仍然要担心：别人会不会因为听到坏消息而先跑。 / You privately heard that the bank's investment looks fairly healthy. If this signal is correct, people who wait until the final day receive the higher payout. But you still have to worry that others may have heard a bad signal and run first.",
     toneClass: "signal-calm",
   };
 }
@@ -135,18 +138,22 @@ function persistStudentToken(token) {
 function buildRules(settings) {
   return `
     <p><strong>中文</strong></p>
-    <p>每个人一开始都把 <strong>${formatNumber(settings.depositAmount)}</strong> 存进校园银行。</p>
-    <p>如果银行撑到第 <strong>${formatNumber(settings.daysUntilMaturity)}</strong> 天都没倒，留到最后的人每人拿 <strong>${formatNumber(settings.maturityPayout)}</strong>。</p>
-    <p>但银行在到期前只能提前兑付 <strong>${formatNumber(settings.liquiditySlots)}</strong> 个人的存款。</p>
-    <p>每天，仍然把钱留在银行里的同学都要悄悄决定：继续存，还是现在就取。</p>
-    <p>你会私下收到一条传言。传言准确率大约是 <strong>${formatNumber(settings.rumorAccuracy)}%</strong>，但它真正影响的是你对“别人会不会先跑”的判断。</p>
-    <p>如果某一天想提前取钱的人超过剩余名额，当天取款的人会被随机排队，前面的人拿到 <strong>${formatNumber(settings.depositAmount)}</strong>，后面的人和还留在银行里的人都拿 <strong>0</strong>，银行立刻倒闭。</p>
+    <p>每个人先把 <strong>${formatNumber(settings.depositAmount)}</strong> 存进校园银行。</p>
+    <p>如果银行撑到第 <strong>${formatNumber(settings.daysUntilMaturity)}</strong> 天：</p>
+    <p>如果它其实是健康银行，留下来的人每人拿 <strong>${formatNumber(settings.goodBankPayout)}</strong>；如果它其实是问题银行，留下来的人每人只拿 <strong>${formatNumber(settings.badBankPayout)}</strong>。</p>
+    <p>如果你提前成功取款，你拿回 <strong>${formatNumber(settings.depositAmount)}</strong>。</p>
+    <p>但银行在到期前总共只能提前兑付 <strong>${formatNumber(settings.liquiditySlots)}</strong> 个人。</p>
+    <p>每天，还在银行里的同学都要悄悄决定：继续存，还是现在就取。</p>
+    <p>你会收到一条关于银行基本面的私有消息。它的准确率大约是 <strong>${formatNumber(settings.signalAccuracy)}%</strong>。</p>
+    <p>如果某一天想提前取款的人超过剩余名额，当天取款的人会被随机排队。排在前面的人拿回 <strong>${formatNumber(settings.depositAmount)}</strong>，排在后面的人和还留在银行里的人都拿 <strong>0</strong>，银行立刻倒闭。</p>
     <p><strong>English</strong></p>
-    <p>Everyone begins by depositing <strong>${formatNumber(settings.depositAmount)}</strong> in the campus bank.</p>
-    <p>If the bank survives until Day <strong>${formatNumber(settings.daysUntilMaturity)}</strong>, anyone who keeps their money in the bank until then receives <strong>${formatNumber(settings.maturityPayout)}</strong>.</p>
+    <p>Everyone first deposits <strong>${formatNumber(settings.depositAmount)}</strong> in the campus bank.</p>
+    <p>If the bank survives until Day <strong>${formatNumber(settings.daysUntilMaturity)}</strong>:</p>
+    <p>If it is actually a good bank, anyone who waits receives <strong>${formatNumber(settings.goodBankPayout)}</strong>. If it is actually a bad bank, anyone who waits receives only <strong>${formatNumber(settings.badBankPayout)}</strong>.</p>
+    <p>If you successfully withdraw early, you secure <strong>${formatNumber(settings.depositAmount)}</strong>.</p>
     <p>Before maturity, the bank can honor only <strong>${formatNumber(settings.liquiditySlots)}</strong> early withdrawals in total.</p>
-    <p>Each day, every student who still has money in the bank privately chooses whether to wait or withdraw now.</p>
-    <p>You also receive one private rumor. Its accuracy is about <strong>${formatNumber(settings.rumorAccuracy)}%</strong>, but its real effect is on your belief about whether other people will run first.</p>
+    <p>Each day, every student still in the bank privately chooses whether to wait or withdraw now.</p>
+    <p>You also receive one private signal about the bank's fundamentals. Its accuracy is about <strong>${formatNumber(settings.signalAccuracy)}%</strong>.</p>
     <p>If, on any day, too many people try to withdraw relative to the remaining slots, that day's withdrawers are randomly queued. The front of the queue secures <strong>${formatNumber(settings.depositAmount)}</strong>, while the rest of that day's withdrawers and everyone still waiting receive <strong>0</strong>. The bank collapses immediately.</p>
   `;
 }
@@ -176,7 +183,8 @@ function initTeacher() {
   const seatCountInput = document.getElementById("seatCountInput");
   const daysInput = document.getElementById("daysInput");
   const depositInput = document.getElementById("depositInput");
-  const maturityInput = document.getElementById("maturityInput");
+  const goodPayoutInput = document.getElementById("goodPayoutInput");
+  const badPayoutInput = document.getElementById("badPayoutInput");
   const liquidityInput = document.getElementById("liquidityInput");
   const accuracyInput = document.getElementById("accuracyInput");
   const startDayButton = document.getElementById("startDayButton");
@@ -202,9 +210,10 @@ function initTeacher() {
     seatCountInput.value = settings.seatCount;
     daysInput.value = settings.daysUntilMaturity;
     depositInput.value = settings.depositAmount;
-    maturityInput.value = settings.maturityPayout;
+    goodPayoutInput.value = settings.goodBankPayout;
+    badPayoutInput.value = settings.badBankPayout;
     liquidityInput.value = settings.liquiditySlots;
-    accuracyInput.value = settings.rumorAccuracy;
+    accuracyInput.value = settings.signalAccuracy;
     configSynced = true;
   }
 
@@ -221,7 +230,7 @@ function initTeacher() {
           lobby: "等待开局 / Lobby",
           collecting: "当天进行中 / Day Open",
           results: "当天已结算 / Day Closed",
-          finished: "撑到最后 / Finished",
+          finished: "已经到期 / Finished",
           failed: "银行倒闭 / Collapsed",
         }[data.status] || data.status
       );
@@ -239,27 +248,29 @@ function initTeacher() {
         if (day.bankCollapsedToday) {
           dayResultText.innerHTML = `
             <strong>第 ${day.number} 天银行倒闭 / The bank collapsed on Day ${day.number}</strong><br />
-            今天有 <strong>${day.attemptedWithdrawals}</strong> 人想提前取钱，但只剩 <strong>${day.remainingLiquidityBefore}</strong> 个名额。队伍后面的人没赶上，银行立刻倒闭。<br />
-            <strong>${day.attemptedWithdrawals}</strong> people tried to withdraw today, but only <strong>${day.remainingLiquidityBefore}</strong> slots remained. The people at the back of the queue were too late, and the bank collapsed immediately.
+            今天有 <strong>${day.attemptedWithdrawals}</strong> 人尝试提前取款，但只剩 <strong>${day.remainingLiquidityBefore}</strong> 个名额。队伍后面的人没赶上，银行立刻倒闭。<br />
+            <strong>${day.attemptedWithdrawals}</strong> people tried to withdraw today, but only <strong>${day.remainingLiquidityBefore}</strong> slots remained. The people at the back of the queue were too late, and the bank collapsed immediately.<br />
+            事后揭晓：它其实是 <strong>${bankTypeLabel(data.actualBankTypeReveal)}</strong>。<br />
+            After the collapse, it turns out the bank was actually a <strong>${bankTypeLabel(data.actualBankTypeReveal)}</strong>.
           `;
         } else if (data.status === "finished") {
           dayResultText.innerHTML = `
-            <strong>第 ${day.number} 天平稳结束 / Day ${day.number} ended safely</strong><br />
-            银行撑到了最后一天。还留在银行里的同学每人拿到 <strong>${formatNumber(data.settings.maturityPayout)}</strong>。<br />
-            The bank survived to the final day. Everyone still in the bank received <strong>${formatNumber(data.settings.maturityPayout)}</strong>.
+            <strong>第 ${day.number} 天到期 / Day ${day.number} reached maturity</strong><br />
+            银行撑到了最后一天，事后揭晓它其实是 <strong>${bankTypeLabel(data.actualBankTypeReveal)}</strong>。因此还留在银行里的人每人拿到 <strong>${formatNumber(day.maturityPayoutApplied)}</strong>。<br />
+            The bank survived to the final day. It turns out the bank was actually a <strong>${bankTypeLabel(data.actualBankTypeReveal)}</strong>, so everyone still waiting received <strong>${formatNumber(day.maturityPayoutApplied)}</strong>.
           `;
         } else {
           dayResultText.innerHTML = `
             <strong>第 ${day.number} 天已结束 / Day ${day.number} closed</strong><br />
-            今天有 <strong>${day.attemptedWithdrawals}</strong> 人尝试提前取款，其中 <strong>${day.successfulToday}</strong> 人拿到本金。剩余提前兑付名额还有 <strong>${day.remainingLiquidityAfter}</strong>。<br />
+            今天有 <strong>${day.attemptedWithdrawals}</strong> 人尝试提前取款，其中 <strong>${day.successfulToday}</strong> 人拿到本金。剩余提前名额还有 <strong>${day.remainingLiquidityAfter}</strong>。<br />
             <strong>${day.attemptedWithdrawals}</strong> people tried to withdraw today, and <strong>${day.successfulToday}</strong> secured their deposits. <strong>${day.remainingLiquidityAfter}</strong> early slots remain.
           `;
         }
       } else if (data.status === "collecting") {
         dayResultText.innerHTML = `
           <strong>第 ${data.currentDay} 天进行中 / Day ${data.currentDay} is open</strong><br />
-          学生正在决定今天是继续等，还是现在跑去取钱。<br />
-          Students are deciding whether to wait one more day or rush to withdraw now.
+          学生正在决定今天继续等，还是现在去取钱。<br />
+          Students are deciding whether to wait one more day or run to withdraw now.
         `;
       } else if (data.status === "lobby") {
         dayResultText.innerHTML = `
@@ -309,7 +320,7 @@ function initTeacher() {
                   <td>${index + 1}</td>
                   ${revealNames ? `<td>${escapeHtml(player?.name || "-")}</td>` : ""}
                   <td>${item.seat}</td>
-                  ${revealNames ? `<td>${escapeHtml(signalCopy(player?.signal || "calm").title)}</td>` : ""}
+                  ${revealNames ? `<td>${escapeHtml(signalCopy(player?.signal || "good").title)}</td>` : ""}
                   <td>${formatNumber(item.cumulative)}</td>
                 </tr>
               `;
@@ -327,7 +338,13 @@ function initTeacher() {
                   <td>${day.successfulToday}</td>
                   <td>${day.remainingLiquidityAfter}</td>
                   <td>${day.defaultWaitCount}</td>
-                  <td>${day.bankCollapsedToday ? "Collapsed" : "Safe"}</td>
+                  <td>${
+                    day.bankCollapsedToday
+                      ? "Collapsed"
+                      : day.maturityPayoutApplied != null
+                        ? `Maturity ${formatNumber(day.maturityPayoutApplied)}`
+                        : "Safe"
+                  }</td>
                 </tr>
               `
             )
@@ -375,7 +392,8 @@ function initTeacher() {
         seatCountInput,
         daysInput,
         depositInput,
-        maturityInput,
+        goodPayoutInput,
+        badPayoutInput,
         liquidityInput,
         accuracyInput,
       ].forEach((input) => {
@@ -405,9 +423,10 @@ function initTeacher() {
           seatCount: Number(seatCountInput.value),
           daysUntilMaturity: Number(daysInput.value),
           depositAmount: Number(depositInput.value),
-          maturityPayout: Number(maturityInput.value),
+          goodBankPayout: Number(goodPayoutInput.value),
+          badBankPayout: Number(badPayoutInput.value),
           liquiditySlots: Number(liquidityInput.value),
-          rumorAccuracy: Number(accuracyInput.value),
+          signalAccuracy: Number(accuracyInput.value),
         },
       });
       configDirty = false;
@@ -450,7 +469,8 @@ function initTeacher() {
     seatCountInput,
     daysInput,
     depositInput,
-    maturityInput,
+    goodPayoutInput,
+    badPayoutInput,
     liquidityInput,
     accuracyInput,
   ].forEach((input) => {
@@ -542,7 +562,7 @@ function initStudent() {
               : {
                   lobby: "等待第 1 天 / Waiting",
                   results: "等待下一天 / Waiting",
-                  finished: "已拿到结果 / Finished",
+                  finished: "已经到期 / Finished",
                   failed: "银行已倒闭 / Collapsed",
                 }[data.status] || data.status
           : playerStatusLabel(data.player.status)
@@ -551,38 +571,47 @@ function initStudent() {
       if (data.player.status === "withdrew") {
         setText(
           "studentInstruction",
-          `你已经在第 ${data.player.resolvedDay} 天提前取出了本金，接下来不用再提交。`
+          `你已经在第 ${data.player.resolvedDay} 天提前取出了本金，后面不需要再提交。`
         );
         setText(
           "studentPositionText",
           "你已经离开银行，不再参与后面的天数。 / You already left the bank and do not act again."
         );
-      } else if (data.player.status === "matured") {
+      } else if (data.player.status === "matured_good") {
         setText(
           "studentInstruction",
-          "你已经坚持到最后一天，拿到了最终回报。"
+          "你坚持到了最后一天，银行最后证明是健康银行。"
         );
         setText(
           "studentPositionText",
-          "你留在银行直到到期。 / You stayed in the bank until maturity."
+          `你最终拿到 ${data.settings.goodBankPayout}。 / You ultimately received ${data.settings.goodBankPayout}.`
+        );
+      } else if (data.player.status === "matured_bad") {
+        setText(
+          "studentInstruction",
+          "你坚持到了最后一天，但银行最后证明是问题银行。"
+        );
+        setText(
+          "studentPositionText",
+          `你最终只拿到 ${data.settings.badBankPayout}。 / You ultimately received only ${data.settings.badBankPayout}.`
         );
       } else if (data.player.status === "lost") {
         setText(
           "studentInstruction",
-          "银行已经倒闭，你这笔钱没有及时取出来。"
+          "银行已经倒闭，你这笔钱没能及时取出来。"
         );
         setText(
           "studentPositionText",
-          "这场挤兑已经结束。 / The run is over."
+          `事后揭晓：它其实是 ${bankTypeLabel(data.actualBankTypeReveal)}。 / After the run, it turns out the bank was actually a ${bankTypeLabel(data.actualBankTypeReveal)}.`
         );
       } else if (canSubmit) {
         setText(
           "studentInstruction",
-          `第 ${data.currentDay} 天已经开始。今天你要决定继续存，还是现在取。`
+          `第 ${data.currentDay} 天已经开始。今天你要决定继续等，还是现在就取。`
         );
         setText(
           "studentPositionText",
-          `如果银行撑到第 ${data.settings.daysUntilMaturity} 天，你会拿到 ${data.settings.maturityPayout}。如果太多人今天抢着取钱，银行可能立刻倒闭。`
+          `如果它是健康银行并撑到第 ${data.settings.daysUntilMaturity} 天，你会拿到 ${data.settings.goodBankPayout}；如果它是问题银行并撑到最后，你只拿到 ${data.settings.badBankPayout}。但如果太多人今天抢着取钱，银行可能立刻倒闭。`
         );
       } else if (data.currentDaySummary?.submitted) {
         setText(
@@ -591,13 +620,10 @@ function initStudent() {
         );
         setText(
           "studentPositionText",
-          "现在最重要的是别人会不会也一起跑。 / What matters now is whether other people run too."
+          "现在最关键的是：别人会不会也一起跑。 / What matters now is whether other people run too."
         );
       } else {
-        setText(
-          "studentInstruction",
-          "等待老师开始下一天。"
-        );
+        setText("studentInstruction", "等待老师开始下一天。");
         setText(
           "studentPositionText",
           "你的钱还留在银行里。 / Your money is still in the bank."
@@ -612,7 +638,7 @@ function initStudent() {
       if (!latest) {
         setText(
           "studentSummaryText",
-          `当前累计到账 0。 / Current total received: 0.`
+          "当前累计到账 0。 / Current total received: 0."
         );
       } else {
         setText(

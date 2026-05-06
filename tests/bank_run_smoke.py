@@ -48,7 +48,7 @@ def choose_student_action(page, action: str):
     page.wait_for_timeout(150)
 
 
-def run_survival_scenario(browser, base_url: str):
+def run_survival_scenario(browser, base_url: str, expected_bank_type: str, expected_maturity: int):
     teacher = browser.new_page()
     teacher.goto(f"{base_url}/bank-run.html?role=teacher", wait_until="networkidle")
     teacher.locator("#configForm button[type='submit']").click()
@@ -81,7 +81,8 @@ def run_survival_scenario(browser, base_url: str):
 
     state = fetch_json(base_url, "/api/bank-run/teacher/state")
     assert state["status"] == "finished", state
-    assert state["bankOutcome"] == "matured", state
+    assert state["bankOutcome"] == f"{expected_bank_type}_matured", state
+    assert state["actualBankTypeReveal"] == expected_bank_type, state
     assert state["successfulWithdrawals"] == 2, state
 
     totals = []
@@ -92,7 +93,7 @@ def run_survival_scenario(browser, base_url: str):
 
     assert totals[0] == 100, totals
     assert totals[1] == 100, totals
-    assert totals[2:] == [150, 150, 150, 150], totals
+    assert totals[2:] == [expected_maturity] * 4, totals
 
     for page in students:
         page.close()
@@ -151,12 +152,19 @@ def run_collapse_scenario(browser, base_url: str):
 
 def main():
     base_url = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:3000"
+    scenario = sys.argv[2] if len(sys.argv) > 2 else "good"
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
-            run_survival_scenario(browser, base_url)
-            run_collapse_scenario(browser, base_url)
+            if scenario == "good":
+                run_survival_scenario(browser, base_url, "good", 150)
+            elif scenario == "bad":
+                run_survival_scenario(browser, base_url, "bad", 80)
+            elif scenario == "collapse":
+                run_collapse_scenario(browser, base_url)
+            else:
+                raise ValueError(f"Unknown scenario: {scenario}")
             print("bank-run-smoke-test: ok")
         finally:
             browser.close()

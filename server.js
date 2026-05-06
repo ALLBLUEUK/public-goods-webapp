@@ -821,8 +821,13 @@ function createBankRunPlayers(count) {
   }));
 }
 
-function drawBankRunRumorState() {
-  return Math.random() < 0.5 ? "calm" : "nervous";
+function forcedBankRunType() {
+  const forced = String(process.env.BANK_RUN_FORCE_TYPE || "").trim().toLowerCase();
+  return ["good", "bad"].includes(forced) ? forced : "";
+}
+
+function drawBankRunActualType() {
+  return forcedBankRunType() || (Math.random() < 0.5 ? "good" : "bad");
 }
 
 function freshBankRunState() {
@@ -830,9 +835,10 @@ function freshBankRunState() {
     seatCount: 6,
     daysUntilMaturity: 3,
     depositAmount: 100,
-    maturityPayout: 150,
+    goodBankPayout: 150,
+    badBankPayout: 80,
     liquiditySlots: 3,
-    rumorAccuracy: 75,
+    signalAccuracy: 75,
   };
 
   return {
@@ -842,7 +848,7 @@ function freshBankRunState() {
     currentDay: 0,
     createdAt: new Date().toISOString(),
     settings: defaults,
-    rumorState: drawBankRunRumorState(),
+    actualBankType: drawBankRunActualType(),
     bankOutcome: "pending",
     successfulWithdrawals: 0,
     players: createBankRunPlayers(defaults.seatCount),
@@ -867,59 +873,87 @@ function bankRunActivePlayers() {
 }
 
 function bankRunRemainingLiquidity() {
-  return Math.max(0, bankRunState.settings.liquiditySlots - bankRunState.successfulWithdrawals);
+  return Math.max(
+    0,
+    bankRunState.settings.liquiditySlots - bankRunState.successfulWithdrawals
+  );
+}
+
+function bankRunMaturityPayout() {
+  return bankRunState.actualBankType === "good"
+    ? bankRunState.settings.goodBankPayout
+    : bankRunState.settings.badBankPayout;
 }
 
 function drawBankRunSignal() {
-  const accurate = Math.random() < bankRunState.settings.rumorAccuracy / 100;
-  if (bankRunState.rumorState === "calm") {
-    return accurate ? "calm" : "warning";
+  const accurate = Math.random() < bankRunState.settings.signalAccuracy / 100;
+  if (bankRunState.actualBankType === "good") {
+    return accurate ? "good" : "bad";
   }
-  return accurate ? "warning" : "calm";
+  return accurate ? "bad" : "good";
 }
 
 function validateBankRunSettings(settings) {
   const seatCount = Number(settings.seatCount);
   const daysUntilMaturity = Number(settings.daysUntilMaturity);
   const depositAmount = Number(settings.depositAmount);
-  const maturityPayout = Number(settings.maturityPayout);
+  const goodBankPayout = Number(settings.goodBankPayout);
+  const badBankPayout = Number(settings.badBankPayout);
   const liquiditySlots = Number(settings.liquiditySlots);
-  const rumorAccuracy = Number(settings.rumorAccuracy);
+  const signalAccuracy = Number(settings.signalAccuracy);
 
   if (!Number.isInteger(seatCount) || seatCount < 2 || seatCount > 6) {
     throw new Error("Players must be an integer between 2 and 6.");
   }
-  if (!Number.isInteger(daysUntilMaturity) || daysUntilMaturity < 2 || daysUntilMaturity > 6) {
+  if (
+    !Number.isInteger(daysUntilMaturity) ||
+    daysUntilMaturity < 2 ||
+    daysUntilMaturity > 6
+  ) {
     throw new Error("Days until maturity must be an integer between 2 and 6.");
   }
   if (!Number.isInteger(depositAmount) || depositAmount < 10 || depositAmount > 1000) {
     throw new Error("Deposit amount must be an integer between 10 and 1000.");
   }
   if (
-    !Number.isInteger(maturityPayout) ||
-    maturityPayout <= depositAmount ||
-    maturityPayout > 2000
+    !Number.isInteger(goodBankPayout) ||
+    goodBankPayout <= depositAmount ||
+    goodBankPayout > 2000
   ) {
-    throw new Error("Maturity payout must be an integer greater than the deposit and at most 2000.");
+    throw new Error(
+      "Good-bank payout must be an integer greater than the deposit and at most 2000."
+    );
+  }
+  if (
+    !Number.isInteger(badBankPayout) ||
+    badBankPayout < 0 ||
+    badBankPayout >= depositAmount
+  ) {
+    throw new Error(
+      "Bad-bank payout must be a non-negative integer smaller than the deposit."
+    );
   }
   if (
     !Number.isInteger(liquiditySlots) ||
     liquiditySlots < 1 ||
     liquiditySlots >= seatCount
   ) {
-    throw new Error("Early cash slots must be at least 1 and smaller than the number of players.");
+    throw new Error(
+      "Early cash slots must be at least 1 and smaller than the number of players."
+    );
   }
-  if (!Number.isInteger(rumorAccuracy) || rumorAccuracy < 55 || rumorAccuracy > 95) {
-    throw new Error("Rumor accuracy must be an integer between 55 and 95.");
+  if (!Number.isInteger(signalAccuracy) || signalAccuracy < 55 || signalAccuracy > 95) {
+    throw new Error("Signal accuracy must be an integer between 55 and 95.");
   }
 
   return {
     seatCount,
     daysUntilMaturity,
     depositAmount,
-    maturityPayout,
+    goodBankPayout,
+    badBankPayout,
     liquiditySlots,
-    rumorAccuracy,
+    signalAccuracy,
   };
 }
 
@@ -934,9 +968,15 @@ function bankRunDaySummary(day) {
     attemptedWithdrawals: day.status === "closed" ? day.attemptedWithdrawals : null,
     successfulToday: day.status === "closed" ? day.successfulToday : null,
     defaultWaitCount: day.status === "closed" ? day.defaultWaitCount : null,
-    remainingLiquidityBefore: day.status === "closed" ? day.remainingLiquidityBefore : null,
-    remainingLiquidityAfter: day.status === "closed" ? day.remainingLiquidityAfter : null,
+    remainingLiquidityBefore:
+      day.status === "closed" ? day.remainingLiquidityBefore : null,
+    remainingLiquidityAfter:
+      day.status === "closed" ? day.remainingLiquidityAfter : null,
     bankCollapsedToday: day.status === "closed" ? day.bankCollapsedToday : false,
+    maturityPayoutApplied:
+      day.status === "closed" && !day.bankCollapsedToday && day.number >= bankRunState.settings.daysUntilMaturity
+        ? bankRunMaturityPayout()
+        : null,
   };
 }
 
@@ -952,6 +992,11 @@ function bankRunRanking() {
 }
 
 function bankRunBaseState(origin) {
+  const revealType =
+    bankRunState.status === "finished" || bankRunState.status === "failed"
+      ? bankRunState.actualBankType
+      : null;
+
   return {
     sessionId: bankRunState.sessionId,
     sessionCode: bankRunState.sessionCode,
@@ -965,10 +1010,7 @@ function bankRunBaseState(origin) {
     activeCount: bankRunActivePlayers().length,
     joinUrl: `${origin}/bank-run.html?role=student`,
     teacherUrl: `${origin}/bank-run.html?role=teacher`,
-    rumorStateReveal:
-      bankRunState.status === "finished" || bankRunState.status === "failed"
-        ? bankRunState.rumorState
-        : null,
+    actualBankTypeReveal: revealType,
     players: bankRunState.players.map((player) => ({
       seat: player.seat,
       name: player.name,
@@ -988,6 +1030,10 @@ function bankRunBaseState(origin) {
         defaultWaitCount: day.defaultWaitCount,
         remainingLiquidityAfter: day.remainingLiquidityAfter,
         bankCollapsedToday: day.bankCollapsedToday,
+        maturityPayoutApplied:
+          !day.bankCollapsedToday && day.number >= bankRunState.settings.daysUntilMaturity
+            ? bankRunMaturityPayout()
+            : null,
       })),
     ranking: bankRunRanking(),
   };
@@ -1008,6 +1054,12 @@ function bankRunTeacherState(origin) {
           remainingLiquidityBefore: day.remainingLiquidityBefore,
           remainingLiquidityAfter: day.remainingLiquidityAfter,
           bankCollapsedToday: day.bankCollapsedToday,
+          maturityPayoutApplied:
+            day.status === "closed" &&
+            !day.bankCollapsedToday &&
+            day.number >= bankRunState.settings.daysUntilMaturity
+              ? bankRunMaturityPayout()
+              : null,
           submissions: day.submissions.map((item) => ({
             seat: item.seat,
             action: item.action,
@@ -1033,7 +1085,8 @@ function resetBankRunSession() {
 }
 
 function applyBankRunDayResults(day) {
-  const { depositAmount, maturityPayout } = bankRunState.settings;
+  const { depositAmount } = bankRunState.settings;
+  const maturityPayout = bankRunMaturityPayout();
   const activePlayers = bankRunActivePlayers();
   const resolvedChoices = activePlayers.map((player) => {
     const submission = day.submissions.find((item) => item.seat === player.seat);
@@ -1078,7 +1131,8 @@ function applyBankRunDayResults(day) {
       choice.outcome = "lost";
       choice.payoff = 0;
     } else if (day.number >= bankRunState.settings.daysUntilMaturity) {
-      choice.outcome = "maturity";
+      choice.outcome =
+        bankRunState.actualBankType === "good" ? "good_maturity" : "bad_maturity";
       choice.payoff = maturityPayout;
     } else {
       choice.outcome = "wait";
@@ -1105,13 +1159,17 @@ function applyBankRunDayResults(day) {
       payoff: choice.payoff,
       cumulative: player.cumulative,
       signal: player.signal,
+      actualBankType: bankRunState.actualBankType,
     });
 
     if (choice.outcome === "withdrew") {
       player.status = "withdrew";
       player.resolvedDay = day.number;
-    } else if (choice.outcome === "maturity") {
-      player.status = "matured";
+    } else if (choice.outcome === "good_maturity") {
+      player.status = "matured_good";
+      player.resolvedDay = day.number;
+    } else if (choice.outcome === "bad_maturity") {
+      player.status = "matured_bad";
       player.resolvedDay = day.number;
     } else if (choice.outcome === "too_late" || choice.outcome === "lost") {
       player.status = "lost";
@@ -1124,7 +1182,7 @@ function applyBankRunDayResults(day) {
     bankRunState.bankOutcome = "collapsed";
   } else if (day.number >= bankRunState.settings.daysUntilMaturity) {
     bankRunState.status = "finished";
-    bankRunState.bankOutcome = "matured";
+    bankRunState.bankOutcome = `${bankRunState.actualBankType}_matured`;
   } else {
     bankRunState.status = "results";
   }
@@ -3221,7 +3279,7 @@ async function handleBankRunApi(req, res, url) {
       bankRunState.days = [];
       bankRunState.successfulWithdrawals = 0;
       bankRunState.bankOutcome = "pending";
-      bankRunState.rumorState = drawBankRunRumorState();
+      bankRunState.actualBankType = drawBankRunActualType();
       bankRunState.status = "lobby";
       sendJson(res, 200, bankRunTeacherState(origin));
     } catch (error) {
