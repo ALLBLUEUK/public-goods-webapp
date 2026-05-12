@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Viral Product Guess</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero" id="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Herding / Information Cascade</p>
+          <h1>新品会不会爆 Viral Product Guess</h1>
+          <p class="lead">
+            每一轮都会出现一款新品。它真实上可能大概率会火，也可能大概率不会火。<br />
+            Each round introduces one new product. In truth it is either more likely to go viral or more likely to flop.
+          </p>
+          <p class="lead">
+            学生按顺序一个个判断。你能看到前面同学公开做出的判断，也会私下拿到自己的一条线索。难点在于：你是相信自己的线索，还是跟着前面的人走？<br />
+            Students decide one by one. You see earlier public guesses and get one private signal of your own. The tension is whether to trust your own clue or follow the herd.
+          </p>
+        </div>
+        <div class="hero-actions" id="heroActions">
+          <a class="button" href="/herding.html?role=teacher">教师端 Teacher</a>
+          <a class="button button-secondary" href="/herding.html?role=student">学生端 Student</a>
+          <a class="button button-secondary" href="/">返回首页 Home</a>
+        </div>
+      </section>
+
+      <section class="hidden" id="teacherPanel">
+        <header class="page-head">
+          <div>
+            <p class="eyebrow">Teacher Console</p>
+            <h2>教师端 Teacher</h2>
+          </div>
+          <div class="status-row">
+            <span class="pill" id="teacherStatus">Loading</span>
+            <span class="pill" id="teacherSessionCode">Session --</span>
+          </div>
+        </header>
+
+        <article class="card teacher-setup-bar">
+          <div class="split-head">
+            <div>
+              <h3>课堂设置 Classroom Setup</h3>
+              <p class="muted">
+                建议用 6 人、4 轮、70% 信号准确率。后面的人会看到更多公开历史，所以多轮随机顺序更公平。<br />
+                Recommended setup: 6 players, 4 rounds, 70% signal accuracy. Later players see more public history, so replaying several rounds with new random order is fairer.
+              </p>
+            </div>
+          </div>
+          <form id="configForm" class="config-grid">
+            <label>
+              <span>人数 Players</span>
+              <input id="seatCountInput" type="number" min="2" max="6" value="6" />
+            </label>
+            <label>
+              <span>轮数 Rounds</span>
+              <input id="maxRoundsInput" type="number" min="1" max="8" value="4" />
+            </label>
+            <label>
+              <span>线索准确率 Signal Accuracy (%)</span>
+              <input id="accuracyInput" type="number" min="55" max="95" value="70" />
+            </label>
+            <label>
+              <span>猜对得分 Correct Guess Reward</span>
+              <input id="rewardInput" type="number" min="1" max="100" value="10" />
+            </label>
+            <button class="button" type="submit">保存设置 Save Settings</button>
+          </form>
+        </article>
+
+        <section class="teacher-layout">
+          <article class="card rules-card">
+            <h3>投屏规则 Rules for Projection</h3>
+            <div id="teacherRules" class="rules-text"></div>
+          </article>
+
+          <article class="card control-card">
+            <h3>课堂控制 Live Control</h3>
+            <div class="button-stack">
+              <button class="button" id="startRoundButton">开始下一轮 Start Next Round</button>
+              <button class="button button-danger" id="resetButton">重置整场 Reset</button>
+            </div>
+            <div class="kpi-grid">
+              <div class="kpi-box">
+                <span class="kpi-label">当前轮次 Current Round</span>
+                <strong id="currentRoundValue">0</strong>
+              </div>
+              <div class="kpi-box">
+                <span class="kpi-label">总轮数 Planned Rounds</span>
+                <strong id="plannedRoundsValue">0</strong>
+              </div>
+              <div class="kpi-box">
+                <span class="kpi-label">已加入 Joined</span>
+                <strong id="joinedCountValue">0</strong>
+              </div>
+              <div class="kpi-box">
+                <span class="kpi-label">已完成猜测 Submitted</span>
+                <strong id="submittedCountValue">0</strong>
+              </div>
+              <div class="kpi-box accent-box">
+                <span class="kpi-label">现在轮到 Current Turn</span>
+                <strong id="currentTurnValue">--</strong>
+              </div>
+              <div class="kpi-box accent-box">
+                <span class="kpi-label">公开判断数 Public Guesses</span>
+                <strong id="publicCountValue">0</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="card result-card">
+            <h3>本轮说明 Round Result</h3>
+            <div id="roundResultText" class="result-text">No round yet.</div>
+          </article>
+
+          <article class="card join-card">
+            <h3>学生入口 Student Entry</h3>
+            <div class="link-box" id="joinUrl">Loading</div>
+            <img class="qr" id="qrImage" alt="Join QR code" />
+            <p class="tiny muted">
+              建议投屏老师端，学生扫码进入自己的判断页面。<br />
+              Best practice: project the teacher view and let students scan into their own pages.
+            </p>
+          </article>
+
+          <article class="card">
+            <h3>当前公开判断 Public Guess History</h3>
+            <div id="publicGuessStrip" class="history-strip"></div>
+          </article>
+
+          <article class="card">
+            <h3>学生状态 Players</h3>
+            <div id="seatBoard" class="seat-board"></div>
+          </article>
+
+          <article class="card">
+            <h3>累计得分 Ranking</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>排名 Rank</th>
+                  <th>座位 Seat</th>
+                  <th>姓名 Name</th>
+                  <th>累计得分 Total</th>
+                </tr>
+              </thead>
+              <tbody id="rankingTable"></tbody>
+            </table>
+          </article>
+
+          <article class="card card-span">
+            <h3>本轮明细 Round Detail</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>顺位 Order</th>
+                  <th>座位 Seat</th>
+                  <th>私有线索 Signal</th>
+                  <th>最终判断 Guess</th>
+                  <th>是否忽略线索 Ignored Signal</th>
+                  <th>得分 Payoff</th>
+                </tr>
+              </thead>
+              <tbody id="roundDetailTable"></tbody>
+            </table>
+          </article>
+
+          <article class="card card-span">
+            <h3>轮次记录 Round History</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>轮次 Round</th>
+                  <th>真实结果 Truth</th>
+                  <th>猜对人数 Correct</th>
+                  <th>忽略线索人数 Ignored Signal</th>
+                </tr>
+              </thead>
+              <tbody id="historyTable"></tbody>
+            </table>
+          </article>
+        </section>
+      </section>
+
+      <section class="hidden" id="studentPanel">
+        <header class="page-head">
+          <div>
+            <p class="eyebrow">Student View</p>
+            <h2>学生端 Student</h2>
+          </div>
+          <div class="status-row">
+            <span class="pill" id="studentStatus">Loading</span>
+            <span class="pill" id="studentSeatBadge">Seat --</span>
+          </div>
+        </header>
+
+        <section class="student-layout">
+          <article class="card" id="joinCard">
+            <h3>进入课堂 Join the Session</h3>
+            <p class="muted">
+              输入你的名字或代号。第一轮开始前加入即可。<br />
+              Enter your name or alias. Join before Round 1 starts.
+            </p>
+            <form id="joinForm" class="config-grid">
+              <label>
+                <span>名字或代号 Name / Alias</span>
+                <input id="nameInput" maxlength="30" placeholder="例如 Example: A / Team 1" />
+              </label>
+              <button class="button" type="submit">进入 Join</button>
+            </form>
+            <p class="tiny muted" id="joinTip">The teacher must save the settings first.</p>
+          </article>
+
+          <article class="card">
+            <h3>学生规则 Student Rules</h3>
+            <div id="studentRules" class="rules-text"></div>
+          </article>
+
+          <div id="studentWorkspace" class="student-grid hidden">
+            <article class="card">
+              <h3>你的判断 Your Guess</h3>
+              <p class="muted" id="studentInstruction">Waiting for the first round.</p>
+              <div class="callout">
+                <strong>前面同学的公开判断 / Public guesses before you</strong>
+                <div id="publicGuessView" class="history-strip"></div>
+                <p class="tiny muted" id="publicGuessSummary">No public guesses yet.</p>
+              </div>
+              <div class="callout signal-card hidden" id="signalCard">
+                <strong id="studentSignalTitle">你的私有线索 / Your private signal</strong>
+                <p class="muted" id="studentSignalText">--</p>
+              </div>
+              <form id="submitForm">
+                <input id="choiceInput" type="hidden" value="viral" />
+                <div class="choice-grid">
+                  <button class="choice-button" type="button" data-choice="viral">
+                    <strong>会火</strong>
+                    <span>Go Viral</span>
+                  </button>
+                  <button class="choice-button" type="button" data-choice="not_viral">
+                    <strong>不会火</strong>
+                    <span>Not Viral</span>
+                  </button>
+                </div>
+                <div class="button-stack">
+                  <button class="button" type="submit">提交判断 Submit Guess</button>
+                </div>
+              </form>
+            </article>
+
+            <article class="card">
+              <h3>你的状态 Your Status</h3>
+              <div id="studentSummaryText" class="result-text">Waiting.</div>
+            </article>
+
+            <article class="card">
+              <h3>个人记录 Your History</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>轮次 Round</th>
+                    <th>顺位 Order</th>
+                    <th>线索 Signal</th>
+                    <th>判断 Guess</th>
+                    <th>结果 Result</th>
+                    <th>累计 Total</th>
+                  </tr>
+                </thead>
+                <tbody id="studentHistory"></tbody>
+              </table>
+            </article>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/herding.js" defer></script>
+  </body>
+</html>

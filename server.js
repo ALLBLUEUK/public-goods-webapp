@@ -1188,6 +1188,254 @@ function applyBankRunDayResults(day) {
   }
 }
 
+function createHerdingPlayers(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    seat: index + 1,
+    name: "",
+    token: "",
+    joinedAt: "",
+    cumulative: 0,
+    history: [],
+  }));
+}
+
+function drawHerdingActualState() {
+  return Math.random() < 0.5 ? "viral" : "not_viral";
+}
+
+function drawHerdingSignal(actualState, accuracy) {
+  const accurate = Math.random() < accuracy / 100;
+  if (actualState === "viral") {
+    return accurate ? "positive" : "negative";
+  }
+  return accurate ? "negative" : "positive";
+}
+
+function herdingSignalDefaultGuess(signal) {
+  return signal === "positive" ? "viral" : "not_viral";
+}
+
+function freshHerdingState() {
+  const defaults = {
+    seatCount: 6,
+    maxRounds: 4,
+    signalAccuracy: 70,
+    correctReward: 10,
+  };
+
+  return {
+    sessionId: crypto.randomUUID(),
+    sessionCode: randomCode(),
+    status: "setup",
+    currentRound: 0,
+    createdAt: new Date().toISOString(),
+    settings: defaults,
+    players: createHerdingPlayers(defaults.seatCount),
+    rounds: [],
+  };
+}
+
+let herdingState = freshHerdingState();
+
+function getHerdingRound() {
+  return herdingState.rounds[herdingState.currentRound - 1] || null;
+}
+
+function herdingPlayerByToken(token) {
+  return herdingState.players.find((player) => player.token === token) || null;
+}
+
+function validateHerdingSettings(settings) {
+  const seatCount = Number(settings.seatCount);
+  const maxRounds = Number(settings.maxRounds);
+  const signalAccuracy = Number(settings.signalAccuracy);
+  const correctReward = Number(settings.correctReward);
+
+  if (!Number.isInteger(seatCount) || seatCount < 2 || seatCount > 6) {
+    throw new Error("Players must be an integer between 2 and 6.");
+  }
+  if (!Number.isInteger(maxRounds) || maxRounds < 1 || maxRounds > 8) {
+    throw new Error("Rounds must be an integer between 1 and 8.");
+  }
+  if (!Number.isInteger(signalAccuracy) || signalAccuracy < 55 || signalAccuracy > 95) {
+    throw new Error("Signal accuracy must be an integer between 55 and 95.");
+  }
+  if (!Number.isInteger(correctReward) || correctReward < 1 || correctReward > 100) {
+    throw new Error("Correct-guess reward must be an integer between 1 and 100.");
+  }
+
+  return {
+    seatCount,
+    maxRounds,
+    signalAccuracy,
+    correctReward,
+  };
+}
+
+function createHerdingRound() {
+  const joinedPlayers = herdingState.players.filter((player) => player.token);
+  const order = shuffle(joinedPlayers.map((player) => player.seat));
+  const actualState = drawHerdingActualState();
+  const signals = Object.fromEntries(
+    order.map((seat) => [
+      seat,
+      drawHerdingSignal(actualState, herdingState.settings.signalAccuracy),
+    ])
+  );
+
+  return {
+    number: herdingState.currentRound,
+    status: "collecting",
+    actualState,
+    order,
+    turnIndex: 0,
+    signals,
+    submissions: [],
+    publicGuesses: [],
+    resolvedChoices: [],
+    correctCount: null,
+    ignoredSignalCount: null,
+    openedAt: new Date().toISOString(),
+    closedAt: null,
+  };
+}
+
+function herdingRoundSummary(round) {
+  if (!round) {
+    return null;
+  }
+
+  const currentTurnSeat =
+    round.status === "collecting" ? round.order[round.turnIndex] || null : null;
+
+  return {
+    number: round.number,
+    status: round.status,
+    order: round.order,
+    submittedCount: round.submissions.length,
+    currentTurnIndex: round.status === "collecting" ? round.turnIndex : null,
+    currentTurnSeat,
+    currentTurnPosition:
+      round.status === "collecting" && currentTurnSeat != null ? round.turnIndex + 1 : null,
+    publicGuesses: round.publicGuesses,
+    actualStateReveal: round.status === "closed" ? round.actualState : null,
+    correctCount: round.status === "closed" ? round.correctCount : null,
+    ignoredSignalCount: round.status === "closed" ? round.ignoredSignalCount : null,
+    resolvedChoices: round.status === "closed" ? round.resolvedChoices : [],
+  };
+}
+
+function herdingRanking() {
+  return herdingState.players
+    .filter((player) => player.token)
+    .map((player) => ({
+      seat: player.seat,
+      cumulative: player.cumulative,
+    }))
+    .sort((a, b) => b.cumulative - a.cumulative || a.seat - b.seat);
+}
+
+function herdingBaseState(origin) {
+  return {
+    sessionId: herdingState.sessionId,
+    sessionCode: herdingState.sessionCode,
+    status: herdingState.status,
+    currentRound: herdingState.currentRound,
+    settings: herdingState.settings,
+    joinedCount: herdingState.players.filter((player) => player.token).length,
+    joinUrl: `${origin}/herding.html?role=student`,
+    teacherUrl: `${origin}/herding.html?role=teacher`,
+    players: herdingState.players.map((player) => ({
+      seat: player.seat,
+      name: player.name,
+      joined: Boolean(player.token),
+      cumulative: player.cumulative,
+    })),
+    currentRoundSummary: herdingRoundSummary(getHerdingRound()),
+    roundHistory: herdingState.rounds
+      .filter((round) => round.status === "closed")
+      .map((round) => ({
+        number: round.number,
+        actualStateReveal: round.actualState,
+        correctCount: round.correctCount,
+        ignoredSignalCount: round.ignoredSignalCount,
+        submittedCount: round.submissions.length,
+      })),
+    ranking: herdingRanking(),
+  };
+}
+
+function herdingTeacherState(origin) {
+  const base = herdingBaseState(origin);
+  return {
+    ...base,
+    players: herdingState.players.map((player) => ({
+      seat: player.seat,
+      name: player.name,
+      joined: Boolean(player.token),
+      cumulative: player.cumulative,
+      history: player.history,
+    })),
+  };
+}
+
+function resetHerdingSession() {
+  herdingState = freshHerdingState();
+}
+
+function resolveHerdingRound(round) {
+  const resolvedChoices = round.order.map((seat, index) => {
+    const submission = round.submissions.find((item) => item.seat === seat);
+    const signal = round.signals[seat];
+    const correct = submission.guess === round.actualState;
+    const ignoredSignal = herdingSignalDefaultGuess(signal) !== submission.guess;
+    const previousGuess = index > 0 ? round.publicGuesses[index - 1].guess : null;
+    return {
+      seat,
+      orderPosition: index + 1,
+      signal,
+      publicBefore: submission.publicBefore,
+      guess: submission.guess,
+      correct,
+      ignoredSignal,
+      followedPrevious: previousGuess ? previousGuess === submission.guess : false,
+      payoff: correct ? herdingState.settings.correctReward : 0,
+    };
+  });
+
+  round.resolvedChoices = resolvedChoices;
+  round.correctCount = resolvedChoices.filter((item) => item.correct).length;
+  round.ignoredSignalCount = resolvedChoices.filter((item) => item.ignoredSignal).length;
+  round.status = "closed";
+  round.closedAt = new Date().toISOString();
+
+  for (const player of herdingState.players.filter((item) => item.token)) {
+    const choice = resolvedChoices.find((item) => item.seat === player.seat);
+    if (!choice) {
+      continue;
+    }
+    player.cumulative += choice.payoff;
+    player.history.push({
+      round: round.number,
+      orderPosition: choice.orderPosition,
+      actualState: round.actualState,
+      signal: choice.signal,
+      guess: choice.guess,
+      correct: choice.correct,
+      ignoredSignal: choice.ignoredSignal,
+      followedPrevious: choice.followedPrevious,
+      payoff: choice.payoff,
+      cumulative: player.cumulative,
+    });
+  }
+
+  if (round.number >= herdingState.settings.maxRounds) {
+    herdingState.status = "finished";
+  } else {
+    herdingState.status = "results";
+  }
+}
+
 function createUltimatumParticipants(count, teacherJoinsIfOdd) {
   const participants = [];
   for (let id = 1; id <= count; id += 1) {
@@ -3505,6 +3753,247 @@ async function handleBankRunApi(req, res, url) {
   sendJson(res, 404, { error: "Endpoint not found." });
 }
 
+async function handleHerdingApi(req, res, url) {
+  const origin = getOrigin(req);
+
+  if (req.method === "GET" && url.pathname === "/api/herding/meta") {
+    sendJson(res, 200, herdingBaseState(origin));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/herding/teacher/state") {
+    sendJson(res, 200, herdingTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/herding/teacher/reset") {
+    resetHerdingSession();
+    sendJson(res, 200, herdingTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/herding/teacher/configure") {
+    const body = await getRequestBody(req);
+    if (herdingState.currentRound > 0 || herdingState.players.some((player) => player.token)) {
+      sendJson(res, 409, {
+        error:
+          "Students have already joined or the game has already started. Reset first before changing settings.",
+      });
+      return;
+    }
+
+    try {
+      const settings = validateHerdingSettings(body);
+      herdingState.settings = settings;
+      herdingState.players = createHerdingPlayers(settings.seatCount);
+      herdingState.currentRound = 0;
+      herdingState.rounds = [];
+      herdingState.status = "lobby";
+      sendJson(res, 200, herdingTeacherState(origin));
+    } catch (error) {
+      sendJson(res, 400, { error: error.message });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/herding/teacher/start-round") {
+    if (herdingState.status === "collecting") {
+      sendJson(res, 409, { error: "A round is already open." });
+      return;
+    }
+    if (herdingState.status === "setup") {
+      sendJson(res, 409, { error: "Configure the session first." });
+      return;
+    }
+    if (herdingState.status === "finished") {
+      sendJson(res, 409, { error: "All rounds are already finished." });
+      return;
+    }
+    if (
+      herdingState.players.filter((player) => player.token).length !==
+      herdingState.settings.seatCount
+    ) {
+      sendJson(res, 409, {
+        error: "All students must join before the round can start.",
+      });
+      return;
+    }
+
+    herdingState.currentRound += 1;
+    herdingState.status = "collecting";
+    herdingState.rounds.push(createHerdingRound());
+    sendJson(res, 200, herdingTeacherState(origin));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/herding/student/join") {
+    const body = await getRequestBody(req);
+    const token = typeof body.token === "string" ? body.token : "";
+    const name = typeof body.name === "string" ? body.name.trim().slice(0, 30) : "";
+    const normalized = normalizeName(name);
+
+    if (herdingState.status === "setup") {
+      sendJson(res, 409, {
+        error: "The teacher has not saved the Herding settings yet.",
+      });
+      return;
+    }
+    if (!(herdingState.status === "lobby" && herdingState.currentRound === 0)) {
+      sendJson(res, 409, {
+        error: "New players can only join before Round 1 starts.",
+      });
+      return;
+    }
+    if (!name) {
+      sendJson(res, 400, { error: "Name or alias cannot be empty." });
+      return;
+    }
+
+    const sameNamePlayer = herdingState.players.find(
+      (player) => player.token && normalizeName(player.name) === normalized
+    );
+    if (sameNamePlayer && sameNamePlayer.token !== token) {
+      sendJson(res, 200, {
+        token: sameNamePlayer.token,
+        seat: sameNamePlayer.seat,
+        name: sameNamePlayer.name,
+        sessionCode: herdingState.sessionCode,
+        rejoined: true,
+      });
+      return;
+    }
+
+    let player = token ? herdingPlayerByToken(token) : null;
+    if (!player) {
+      player = herdingState.players.find((item) => !item.token) || null;
+    }
+    if (!player) {
+      sendJson(res, 409, { error: "The session is already full." });
+      return;
+    }
+
+    if (!player.token) {
+      player.token = crypto.randomUUID();
+      player.joinedAt = new Date().toISOString();
+    }
+    player.name = name;
+
+    sendJson(res, 200, {
+      token: player.token,
+      seat: player.seat,
+      name: player.name,
+      sessionCode: herdingState.sessionCode,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/herding/student/state") {
+    const token = url.searchParams.get("token") || "";
+    const player = herdingPlayerByToken(token);
+    if (!player) {
+      sendJson(res, 404, { error: "Student identity not found. Please rejoin." });
+      return;
+    }
+
+    const round = getHerdingRound();
+    const ownSubmission =
+      round?.submissions.find((item) => item.seat === player.seat) || null;
+    const ownResolved =
+      round?.resolvedChoices.find((item) => item.seat === player.seat) || null;
+    const orderPosition = round ? round.order.indexOf(player.seat) + 1 : null;
+    const currentTurnSeat =
+      round?.status === "collecting" ? round.order[round.turnIndex] || null : null;
+    const canAct =
+      round?.status === "collecting" &&
+      currentTurnSeat === player.seat &&
+      !ownSubmission;
+    const signalVisible = Boolean(canAct || ownSubmission || ownResolved);
+    const signal = signalVisible && round ? round.signals[player.seat] : null;
+
+    sendJson(res, 200, {
+      ...herdingBaseState(origin),
+      player: {
+        seat: player.seat,
+        name: player.name,
+        cumulative: player.cumulative,
+        history: player.history,
+      },
+      currentRoundSummary: round
+        ? {
+            ...herdingRoundSummary(round),
+            orderPosition: orderPosition || null,
+            totalPlayersInRound: round.order.length,
+            canAct,
+            submitted: Boolean(ownSubmission),
+            signal,
+            ownGuess: ownSubmission
+              ? ownSubmission.guess
+              : ownResolved
+                ? ownResolved.guess
+                : null,
+          }
+        : null,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/herding/student/submit-guess") {
+    const body = await getRequestBody(req);
+    const token = typeof body.token === "string" ? body.token : "";
+    const guess = typeof body.guess === "string" ? body.guess : "";
+    const player = herdingPlayerByToken(token);
+    const round = getHerdingRound();
+
+    if (!player) {
+      sendJson(res, 404, { error: "Student identity not found. Please rejoin." });
+      return;
+    }
+    if (!round || round.status !== "collecting") {
+      sendJson(res, 409, { error: "The round is not open right now." });
+      return;
+    }
+    if (!["viral", "not_viral"].includes(guess)) {
+      sendJson(res, 400, { error: "Guess must be either 'viral' or 'not_viral'." });
+      return;
+    }
+    if (round.order[round.turnIndex] !== player.seat) {
+      sendJson(res, 409, { error: "It is not your turn yet." });
+      return;
+    }
+    if (round.submissions.some((item) => item.seat === player.seat)) {
+      sendJson(res, 409, { error: "You have already submitted this round." });
+      return;
+    }
+
+    round.submissions.push({
+      seat: player.seat,
+      guess,
+      signal: round.signals[player.seat],
+      publicBefore: [...round.publicGuesses],
+      submittedAt: new Date().toISOString(),
+    });
+    round.publicGuesses.push({
+      seat: player.seat,
+      guess,
+    });
+
+    if (round.submissions.length >= round.order.length) {
+      resolveHerdingRound(round);
+    } else {
+      round.turnIndex += 1;
+    }
+
+    sendJson(res, 200, {
+      ok: true,
+      submittedCount: round.submissions.length,
+      status: round.status,
+    });
+    return;
+  }
+
+  sendJson(res, 404, { error: "Endpoint not found." });
+}
+
 async function handleUltimatumApi(req, res, url) {
   const origin = getOrigin(req);
 
@@ -3900,6 +4389,10 @@ async function handleApi(req, res, url) {
   }
   if (url.pathname.startsWith("/api/bank-run/")) {
     await handleBankRunApi(req, res, url);
+    return;
+  }
+  if (url.pathname.startsWith("/api/herding/")) {
+    await handleHerdingApi(req, res, url);
     return;
   }
   await handlePublicGoodsApi(req, res, url);

@@ -286,6 +286,11 @@ select {
   font-size: 22px;
 }
 
+.seat-active {
+  border-color: rgba(13, 122, 107, 0.4);
+  background: #edf7f4;
+}
+
 .rules-text p {
   margin-bottom: 10px;
 }
@@ -496,6 +501,39 @@ select {
 .choice-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.history-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.guess-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+  font-size: 13px;
+}
+
+.guess-viral {
+  background: #edf7f4;
+  color: var(--accent-strong);
+}
+
+.guess-not-viral {
+  background: #fff4ea;
+  color: var(--warm);
+}
+
+.guess-neutral {
+  background: #f3f4f2;
+  color: var(--muted);
 }
 
 .rules-table td,
